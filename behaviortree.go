@@ -1,4 +1,4 @@
-package behaviortree
+package behave
 
 import "strings"
 
