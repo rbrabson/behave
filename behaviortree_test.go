@@ -12,11 +12,8 @@ func TestStatus_String(t *testing.T) {
 	}{
 		{Success, "Success"},
 		{Failure, "Failure"},
-		{Initializing, "Initializing"},
 		{Ready, "Ready"},
 		{Running, "Running"},
-		{Stopping, "Stopping"},
-		{Stopped, "Stopped"},
 	}
 
 	for _, test := range tests {
@@ -39,18 +36,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestBehaviorTree_Init(t *testing.T) {
-	action := &Action{
-		InitFunc: func() Status { return Ready },
-	}
-	bt := New(action)
 
-	status := bt.Init()
-	if status != Ready {
-		t.Errorf("BehaviorTree.Init() = %v, want %v", status, Ready)
-	}
-	if bt.Status() != Ready {
-		t.Errorf("BehaviorTree.Status() after Init() = %v, want %v", bt.Status(), Ready)
-	}
 }
 
 func TestBehaviorTree_Tick(t *testing.T) {
@@ -69,18 +55,7 @@ func TestBehaviorTree_Tick(t *testing.T) {
 }
 
 func TestBehaviorTree_Stop(t *testing.T) {
-	action := &Action{
-		StopFunc: func() Status { return Stopped },
-	}
-	bt := New(action)
 
-	status := bt.Stop()
-	if status != Stopped {
-		t.Errorf("BehaviorTree.Stop() = %v, want %v", status, Stopped)
-	}
-	if bt.Status() != Stopped {
-		t.Errorf("BehaviorTree.Status() after Stop() = %v, want %v", bt.Status(), Stopped)
-	}
 }
 
 func TestBehaviorTree_String(t *testing.T) {
@@ -97,36 +72,7 @@ func TestBehaviorTree_String(t *testing.T) {
 }
 
 func TestAction_Init(t *testing.T) {
-	tests := []struct {
-		name     string
-		action   *Action
-		expected Status
-	}{
-		{
-			name:     "no init func",
-			action:   &Action{},
-			expected: Ready,
-		},
-		{
-			name: "with init func",
-			action: &Action{
-				InitFunc: func() Status { return Running },
-			},
-			expected: Running,
-		},
-	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			status := test.action.Init()
-			if status != test.expected {
-				t.Errorf("Action.Init() = %v, want %v", status, test.expected)
-			}
-			if test.action.Status() != test.expected {
-				t.Errorf("Action.Status() after Init() = %v, want %v", test.action.Status(), test.expected)
-			}
-		})
-	}
 }
 
 func TestAction_Tick(t *testing.T) {
@@ -171,39 +117,6 @@ func TestAction_Tick(t *testing.T) {
 			}
 			if test.action.Status() != test.expected {
 				t.Errorf("Action.Status() after Tick() = %v, want %v", test.action.Status(), test.expected)
-			}
-		})
-	}
-}
-
-func TestAction_Stop(t *testing.T) {
-	tests := []struct {
-		name     string
-		action   *Action
-		expected Status
-	}{
-		{
-			name:     "no stop func",
-			action:   &Action{},
-			expected: Stopped,
-		},
-		{
-			name: "with stop func",
-			action: &Action{
-				StopFunc: func() Status { return Stopping },
-			},
-			expected: Stopping,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			status := test.action.Stop()
-			if status != test.expected {
-				t.Errorf("Action.Stop() = %v, want %v", status, test.expected)
-			}
-			if test.action.Status() != test.expected {
-				t.Errorf("Action.Status() after Stop() = %v, want %v", test.action.Status(), test.expected)
 			}
 		})
 	}
@@ -376,12 +289,6 @@ func TestComplexBehaviorTree(t *testing.T) {
 	sequence := &Sequence{Children: []Node{action2, action3}}
 	selector := &Selector{Children: []Node{action1, sequence}}
 	bt := New(selector)
-
-	// Initialize the tree
-	bt.Init()
-	if bt.Status() != Ready {
-		t.Errorf("BehaviorTree.Status() after Init() = %v, want %v", bt.Status(), Ready)
-	}
 
 	// Tick the tree
 	status := bt.Tick()

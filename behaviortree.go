@@ -1,25 +1,40 @@
 package behave
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // Status represents the result of a behavior tree node's execution.
 type Status int
 
 const (
-	Success      Status = iota // Node completed successfully
-	Failure                    // Node failed
-	Initializing               // Node is initializing
-	Ready                      // Node is ready
-	Running                    // Node is running
-	Stopping                   // Node is stopping
-	Stopped                    // Node has stopped
+	Ready   Status = iota // Node is ready to run
+	Running               // Node is running
+	Success               // Node completed successfully
+	Failure               // Node failed
 )
+
+// String returns the string representation of the Status.
+func (s Status) String() string {
+	switch s {
+	case Ready:
+		return "Ready"
+	case Running:
+		return "Running"
+	case Success:
+		return "Success"
+	case Failure:
+		return "Failure"
+	default:
+		return "Unknown"
+	}
+}
 
 // Node is the interface for all behavior tree nodes.
 type Node interface {
-	Init() Status   // Initialize the node
 	Tick() Status   // Run the node on each tick
-	Stop() Status   // Stop the node
+	Reset() Status  // Reset the node to initial state
 	Status() Status // Get the current status of the node
 	String() string // Get a string representation of the node
 }
@@ -30,29 +45,9 @@ type BehaviorTree struct {
 	status Status
 }
 
-// Stop stops the behavior tree and its root node.
-func (bt *BehaviorTree) Stop() Status {
-	if bt.Root != nil {
-		bt.status = bt.Root.Stop()
-		return bt.status
-	}
-	bt.status = Stopped
-	return bt.status
-}
-
 // New creates a new BehaviorTree with the given root node.
 func New(root Node) *BehaviorTree {
 	return &BehaviorTree{Root: root, status: Ready}
-}
-
-// Init initializes the behavior tree and its root node.
-func (bt *BehaviorTree) Init() Status {
-	if bt.Root != nil {
-		bt.status = bt.Root.Init()
-		return bt.status
-	}
-	bt.status = Ready
-	return bt.status
 }
 
 // Tick executes the behavior tree.
@@ -63,6 +58,15 @@ func (bt *BehaviorTree) Tick() Status {
 	}
 	bt.status = bt.Root.Tick()
 	return bt.status
+}
+
+// Reset resets the behavior tree to its initial state.
+func (bt *BehaviorTree) Reset() *BehaviorTree {
+	if bt.Root != nil {
+		bt.Root.Reset()
+	}
+	bt.status = Ready
+	return bt
 }
 
 // Status returns the current status of the behavior tree.
@@ -85,6 +89,14 @@ func (bt *BehaviorTree) String() string {
 			builder.WriteString("Action (" + n.Status().String() + ")")
 		case *Condition:
 			builder.WriteString("Condition (" + n.Status().String() + ")")
+		case *Composite:
+			builder.WriteString("Composite (" + n.Status().String() + ")")
+			if n.Condition != nil {
+				printNode(n.Condition, depth+1)
+			}
+			if n.Child != nil {
+				printNode(n.Child, depth+1)
+			}
 		case *Sequence:
 			builder.WriteString("Sequence (" + n.Status().String() + ")")
 			for _, child := range n.Children {
@@ -92,6 +104,11 @@ func (bt *BehaviorTree) String() string {
 			}
 		case *Selector:
 			builder.WriteString("Selector (" + n.Status().String() + ")")
+			for _, child := range n.Children {
+				printNode(child, depth+1)
+			}
+		case *Parallel:
+			builder.WriteString("Parallel (" + n.Status().String() + ", MinSuccess: " + strconv.Itoa(n.MinSuccessCount) + ")")
 			for _, child := range n.Children {
 				printNode(child, depth+1)
 			}
@@ -105,10 +122,8 @@ func (bt *BehaviorTree) String() string {
 
 // Action is a leaf node that performs an action.
 type Action struct {
-	InitFunc func() Status
-	Run      func() Status
-	StopFunc func() Status
-	status   Status
+	Run    func() Status
+	status Status
 }
 
 // Tick executes the action's Run function and handles all status values.
@@ -119,7 +134,7 @@ func (a *Action) Tick() Status {
 	}
 	status := a.Run()
 	switch status {
-	case Initializing, Ready, Running, Stopping, Stopped, Success, Failure:
+	case Ready, Running, Success, Failure:
 		a.status = status
 		return a.status
 	default:
@@ -128,23 +143,9 @@ func (a *Action) Tick() Status {
 	}
 }
 
-// Init for Action calls InitFunc if set, otherwise returns Ready.
-func (a *Action) Init() Status {
-	if a.InitFunc != nil {
-		a.status = a.InitFunc()
-		return a.status
-	}
+// Reset resets the Action node to its initial state.
+func (a *Action) Reset() Status {
 	a.status = Ready
-	return a.status
-}
-
-// Stop for Action calls StopFunc if set, otherwise returns Stopped.
-func (a *Action) Stop() Status {
-	if a.StopFunc != nil {
-		a.status = a.StopFunc()
-		return a.status
-	}
-	a.status = Stopped
 	return a.status
 }
 
@@ -162,10 +163,8 @@ func (a *Action) String() string {
 
 // Condition is a leaf node that checks a condition.
 type Condition struct {
-	InitFunc func() Status
-	Check    func() Status
-	StopFunc func() Status
-	status   Status
+	Check  func() Status
+	status Status
 }
 
 // Tick executes the condition's Check function.
@@ -176,7 +175,7 @@ func (c *Condition) Tick() Status {
 	}
 	status := c.Check()
 	switch status {
-	case Initializing, Ready, Running, Stopping, Stopped, Success, Failure:
+	case Ready, Running, Success, Failure:
 		c.status = status
 		return c.status
 	default:
@@ -185,23 +184,9 @@ func (c *Condition) Tick() Status {
 	}
 }
 
-// Init for Condition calls InitFunc if set, otherwise returns Ready.
-func (c *Condition) Init() Status {
-	if c.InitFunc != nil {
-		c.status = c.InitFunc()
-		return c.status
-	}
+// Reset resets the Condition node to its initial state.
+func (c *Condition) Reset() Status {
 	c.status = Ready
-	return c.status
-}
-
-// Stop for Condition calls StopFunc if set, otherwise returns Stopped.
-func (c *Condition) Stop() Status {
-	if c.StopFunc != nil {
-		c.status = c.StopFunc()
-		return c.status
-	}
-	c.status = Stopped
 	return c.status
 }
 
@@ -217,35 +202,98 @@ func (c *Condition) String() string {
 	return builder.String()
 }
 
+// Composite is a node that combines a condition and any other node.
+// It first checks the condition, and if it succeeds, runs the child node.
+type Composite struct {
+	Condition Node
+	Child     Node
+	status    Status
+}
+
+// Tick executes the composite by first checking the condition, then running the child node if condition succeeds.
+func (c *Composite) Tick() Status {
+	if c.Condition == nil && c.Child == nil {
+		c.status = Failure
+		return c.status
+	}
+
+	// If no condition, just run the child node
+	if c.Condition == nil {
+		if c.Child != nil {
+			c.status = c.Child.Tick()
+			return c.status
+		}
+		c.status = Failure
+		return c.status
+	}
+
+	// Check the condition first
+	conditionStatus := c.Condition.Tick()
+	switch conditionStatus {
+	case Success:
+		// Condition succeeded, run the child node
+		if c.Child != nil {
+			c.status = c.Child.Tick()
+			return c.status
+		}
+		c.status = Success
+		return c.status
+	case Running:
+		// Condition is still running
+		c.status = Running
+		return c.status
+	case Failure, Ready:
+		// Condition failed or not ready, composite fails
+		c.status = Failure
+		return c.status
+	default:
+		c.status = Failure
+		return c.status
+	}
+}
+
+// Reset resets the Composite node and its condition and child node to their initial state.
+func (c *Composite) Reset() Status {
+	if c.Condition != nil {
+		c.Condition.Reset()
+	}
+	if c.Child != nil {
+		c.Child.Reset()
+	}
+	c.status = Ready
+	return c.status
+}
+
+// Status returns the current status of the Composite node.
+func (c *Composite) Status() Status {
+	return c.status
+}
+
+// String returns a string representation of the Composite node.
+func (c *Composite) String() string {
+	var builder strings.Builder
+	builder.WriteString("Composite (" + c.Status().String() + ")")
+	if c.Condition != nil {
+		builder.WriteString("\n  Condition: " + c.Condition.String())
+	}
+	if c.Child != nil {
+		builder.WriteString("\n  Child: " + c.Child.String())
+	}
+	return builder.String()
+}
+
 // Sequence is a Node that runs its children in order until one fails or is running.
 type Sequence struct {
 	Children []Node
 	status   Status
 }
 
-// Init initializes all children of the Sequence node.
-func (s *Sequence) Init() Status {
+// Reset resets the Sequence node and all its children to their initial state.
+func (s *Sequence) Reset() Status {
 	for _, child := range s.Children {
-		st := child.Init()
-		if st != Ready && st != Success {
-			s.status = st
-			return st
-		}
+		child.Reset()
 	}
 	s.status = Ready
-	return s.status
-}
-
-// Stop stops all children of the Sequence node.
-func (s *Sequence) Stop() Status {
-	for _, child := range s.Children {
-		st := child.Stop()
-		if st != Stopped && st != Success {
-			s.status = st
-			return st
-		}
-	}
-	s.status = Stopped
 	return s.status
 }
 
@@ -256,7 +304,7 @@ func (s *Sequence) Tick() Status {
 		switch status {
 		case Success:
 			// continue to next child
-		case Ready, Initializing, Running, Stopping, Stopped, Failure:
+		case Ready, Running, Failure:
 			s.status = status
 			return s.status
 		default:
@@ -290,29 +338,12 @@ type Selector struct {
 	status   Status
 }
 
-// Init initializes all children of the Selector node.
-func (s *Selector) Init() Status {
+// Reset resets the Selector node and all its children to their initial state.
+func (s *Selector) Reset() Status {
 	for _, child := range s.Children {
-		st := child.Init()
-		if st != Ready && st != Success {
-			s.status = st
-			return st
-		}
+		child.Reset()
 	}
 	s.status = Ready
-	return s.status
-}
-
-// Stop stops all children of the Selector node.
-func (s *Selector) Stop() Status {
-	for _, child := range s.Children {
-		st := child.Stop()
-		if st != Stopped && st != Success {
-			s.status = st
-			return st
-		}
-	}
-	s.status = Stopped
 	return s.status
 }
 
@@ -323,7 +354,7 @@ func (s *Selector) Tick() Status {
 		switch status {
 		case Failure:
 			// continue to next child
-		case Ready, Initializing, Running, Stopping, Stopped, Success:
+		case Ready, Running, Success:
 			s.status = status
 			return s.status
 		default:
@@ -351,24 +382,98 @@ func (s *Selector) String() string {
 	return builder.String()
 }
 
-// String returns the string representation of the Status.
-func (s Status) String() string {
-	switch s {
-	case Success:
-		return "Success"
-	case Failure:
-		return "Failure"
-	case Initializing:
-		return "Initializing"
-	case Ready:
-		return "Ready"
-	case Running:
-		return "Running"
-	case Stopping:
-		return "Stopping"
-	case Stopped:
-		return "Stopped"
-	default:
-		return "Unknown"
+// Parallel is a Node that runs all its children in parallel and returns Success
+// if at least M children report Success, where M is specified by MinSuccessCount.
+type Parallel struct {
+	Children        []Node
+	MinSuccessCount int // Minimum number of children that must succeed for parallel to succeed
+	status          Status
+}
+
+// Reset resets the Parallel node and all its children to their initial state.
+func (p *Parallel) Reset() Status {
+	for _, child := range p.Children {
+		child.Reset()
 	}
+	p.status = Ready
+	return p.status
+}
+
+// Tick runs all children in parallel and evaluates based on MinSuccessCount.
+func (p *Parallel) Tick() Status {
+	if len(p.Children) == 0 {
+		p.status = Success
+		return p.status
+	}
+
+	// Validate MinSuccessCount
+	if p.MinSuccessCount <= 0 {
+		p.MinSuccessCount = 1
+	}
+	if p.MinSuccessCount > len(p.Children) {
+		p.MinSuccessCount = len(p.Children)
+	}
+
+	successCount := 0
+	failureCount := 0
+	runningCount := 0
+
+	// Tick all children
+	for _, child := range p.Children {
+		status := child.Tick()
+		switch status {
+		case Success:
+			successCount++
+		case Failure:
+			failureCount++
+		case Running:
+			runningCount++
+		case Ready:
+			// Treat Ready as still processing
+			runningCount++
+		}
+	}
+
+	// Check if we have enough successes
+	if successCount >= p.MinSuccessCount {
+		p.status = Success
+		return p.status
+	}
+
+	// Check if we can never reach MinSuccessCount (too many failures)
+	maxPossibleSuccesses := successCount + runningCount
+	if maxPossibleSuccesses < p.MinSuccessCount {
+		p.status = Failure
+		return p.status
+	}
+
+	// Still have a chance to succeed, keep running
+	if runningCount > 0 {
+		p.status = Running
+		return p.status
+	}
+
+	// All children are done but we don't have enough successes
+	p.status = Failure
+	return p.status
+}
+
+// Status returns the current status of the Parallel node.
+func (p *Parallel) Status() Status {
+	return p.status
+}
+
+// String returns a string representation of the Parallel node.
+func (p *Parallel) String() string {
+	var builder strings.Builder
+	builder.WriteString("Parallel (")
+	builder.WriteString(p.Status().String())
+	builder.WriteString(", MinSuccess: ")
+	builder.WriteString(strconv.Itoa(p.MinSuccessCount))
+	builder.WriteString(")")
+	for _, child := range p.Children {
+		builder.WriteString("\n  ")
+		builder.WriteString(child.String())
+	}
+	return builder.String()
 }
