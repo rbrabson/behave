@@ -13,7 +13,8 @@ Nodes in the tree return a `Status` after execution:
 
 - `Success`: Node completed successfully
 - `Failure`: Node failed
-- `Initializing`, `Ready`, `Running`, `Stopping`, `Stopped`: Used for lifecycle management
+- `Ready`: Node is ready to run
+- `Running`: Node is currently running
 
 ### Node Interface
 
@@ -21,9 +22,8 @@ All nodes implement the following interface:
 
 ```go
 type Node interface {
-    Init() Status   // Initialize the node
     Tick() Status   // Run the node on each tick
-    Stop() Status   // Stop the node
+    Reset() Status  // Reset the node to initial state
     Status() Status // Get the current status
     String() string // String representation
 }
@@ -31,14 +31,16 @@ type Node interface {
 
 ### Node Types
 
-- **Action**: Leaf node that performs an action. You provide `InitFunc`, `Run`, and `StopFunc` functions.
-- **Condition**: Leaf node that checks a condition. You provide `InitFunc`, `Check`, and `StopFunc` functions.
+- **Action**: Leaf node that performs an action. You provide a `Run` function.
+- **Condition**: Leaf node that checks a condition. You provide a `Check` function.
+- **Composite**: Combines a condition with any other node. First checks the condition, and if it succeeds, runs the child node.
 - **Sequence**: Composite node. Runs children in order; fails or returns running if any child fails or is running, succeeds if all succeed.
 - **Selector**: Composite node. Runs children in order; succeeds or returns running if any child succeeds or is running, fails if all fail.
+- **Parallel**: Composite node. Runs all children in parallel; succeeds if at least `MinSuccessCount` children succeed.
 
 ### BehaviorTree
 
-The `BehaviorTree` struct manages the root node and provides methods to initialize, tick, stop, and get the status of the tree.
+The `BehaviorTree` struct manages the root node and provides methods to tick, reset, and get the status of the tree.
 
 ## Example Usage
 
@@ -58,7 +60,6 @@ func main() {
         },
     }
     tree := behave.New(action)
-    tree.Init()
     status := tree.Tick()
     fmt.Println("Tree status:", status)
 }
@@ -66,20 +67,51 @@ func main() {
 
 ## Tree Structure Example
 
-You can compose trees using `Sequence` and `Selector` nodes:
+You can compose trees using different node types:
 
 ```go
-tree := behaviortree.New(sel)
+// Simple sequence
 seq := &behave.Sequence{
     Children: []behave.Node{
         &behave.Condition{Check: myCheckFunc},
         &behave.Action{Run: myActionFunc},
     },
 }
+
+// Selector with fallback
 sel := &behave.Selector{
-    Children: []behave.Node{seq, otherNode},
+    Children: []behave.Node{seq, &behave.Action{Run: fallbackFunc}},
 }
-tree := behave.New(sel)
+
+// Composite (condition + action)
+comp := &behave.Composite{
+    Condition: &behave.Condition{Check: guardFunc},
+    Child: &behave.Action{Run: protectedFunc},
+}
+
+// Parallel execution (at least 2 out of 3 must succeed)
+par := &behave.Parallel{
+    MinSuccessCount: 2,
+    Children: []behave.Node{
+        &behave.Action{Run: task1},
+        &behave.Action{Run: task2},
+        &behave.Action{Run: task3},
+    },
+}
+
+tree := behave.New(par)
+```
+
+## Reset Functionality
+
+All nodes can be reset to their initial state:
+
+```go
+// Reset the entire tree
+tree.Reset()
+
+// Reset individual nodes
+node.Reset()
 ```
 
 ## Status String Representation
