@@ -35,10 +35,6 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestBehaviorTree_Init(t *testing.T) {
-
-}
-
 func TestBehaviorTree_Tick(t *testing.T) {
 	action := &Action{
 		Run: func() Status { return Success },
@@ -54,10 +50,6 @@ func TestBehaviorTree_Tick(t *testing.T) {
 	}
 }
 
-func TestBehaviorTree_Stop(t *testing.T) {
-
-}
-
 func TestBehaviorTree_String(t *testing.T) {
 	action := &Action{}
 	bt := New(action)
@@ -69,10 +61,6 @@ func TestBehaviorTree_String(t *testing.T) {
 	if !strings.Contains(str, "Action") {
 		t.Errorf("BehaviorTree.String() should contain 'Action', got %v", str)
 	}
-}
-
-func TestAction_Init(t *testing.T) {
-
 }
 
 func TestAction_Tick(t *testing.T) {
