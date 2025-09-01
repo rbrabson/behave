@@ -92,7 +92,7 @@ func (bt *BehaviorTree) String() string {
 		case *Composite:
 			builder.WriteString("Composite (" + n.Status().String() + ")")
 			for i := range n.Conditions {
-				printNode(&n.Conditions[i], depth+1)
+				printNode(n.Conditions[i], depth+1)
 			}
 			if n.Child != nil {
 				printNode(n.Child, depth+1)
@@ -215,7 +215,7 @@ func (c *Condition) String() string {
 // Composite is a node that combines multiple conditions with any other node.
 // It first checks all conditions, and if they all succeed, runs the child node.
 type Composite struct {
-	Conditions []Condition
+	Conditions []Node
 	Child      Node
 	status     Status
 }
@@ -289,7 +289,7 @@ func (c *Composite) String() string {
 	var builder strings.Builder
 	builder.WriteString("Composite (" + c.Status().String() + ")")
 	for i := range c.Conditions {
-		builder.WriteString("\n  Condition[" + strconv.Itoa(i) + "]: " + c.Conditions[i].String())
+		builder.WriteString("\n  Node[" + strconv.Itoa(i) + "]: " + c.Conditions[i].String())
 	}
 	if c.Child != nil {
 		builder.WriteString("\n  Child: " + c.Child.String())
