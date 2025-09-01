@@ -401,7 +401,7 @@ func (s *Selector) String() string {
 // if at least M children report Success, where M is specified by MinSuccessCount.
 type Parallel struct {
 	Children        []Node
-	MinSuccessCount int // Minimum number of children that must succeed for parallel to succeed
+	MinSuccessCount int
 	status          Status
 }
 
