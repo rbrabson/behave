@@ -37,6 +37,8 @@ type Node interface {
 - **Sequence**: Composite node. Runs children in order; fails or returns running if any child fails or is running, succeeds if all succeed.
 - **Selector**: Composite node. Runs children in order; succeeds or returns running if any child succeeds or is running, fails if all fail.
 - **Parallel**: Composite node. Runs all children in parallel; succeeds if at least `MinSuccessCount` children succeed.
+- **Retry**: Decorator node. Retries its child until it succeeds, ignoring all failures. Returns Success when child succeeds, Running while retrying.
+- **Repeat**: Decorator node. Repeats its child until it fails. Returns Running while child succeeds (and resets it), Failure when child fails.
 
 ### BehaviorTree
 
@@ -99,7 +101,103 @@ par := &behave.Parallel{
     },
 }
 
+// Retry until success (keeps trying after failures)
+retry := &behave.Retry{
+    Child: &behave.Action{Run: unreliableFunc},
+}
+
 tree := behave.New(par)
+```
+
+## Retry Node Example
+
+The Retry node is particularly useful for unreliable operations that might fail but should eventually succeed:
+
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    attempts := 0
+    
+    // Unreliable action that fails randomly
+    unreliableAction := &behave.Action{
+        Run: func() behave.Status {
+            attempts++
+            fmt.Printf("Attempt %d: ", attempts)
+            
+            if rand.Float32() < 0.7 { // 70% chance of failure
+                fmt.Println("Failed!")
+                return behave.Failure
+            }
+            
+            fmt.Println("Success!")
+            return behave.Success
+        },
+    }
+    
+    // Wrap with Retry to keep trying until success
+    retry := &behave.Retry{Child: unreliableAction}
+    tree := behave.New(retry)
+    
+    // Keep ticking until the tree succeeds
+    for tree.Status() != behave.Success {
+        tree.Tick()
+    }
+    
+    fmt.Printf("Finally succeeded after %d attempts!\n", attempts)
+}
+```
+
+## Repeat Node Example
+
+The Repeat node is useful for tasks that should continue running until they fail:
+
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    rounds := 0
+    
+    // Action that succeeds a few times then fails
+    taskAction := &behave.Action{
+        Run: func() behave.Status {
+            rounds++
+            fmt.Printf("Round %d: ", rounds)
+            
+            if rounds >= 5 { // Fail after 5 rounds
+                fmt.Println("Failed - stopping!")
+                return behave.Failure
+            }
+            
+            fmt.Println("Success - continuing!")
+            return behave.Success
+        },
+    }
+    
+    // Wrap with Repeat to keep running until failure
+    repeat := &behave.Repeat{Child: taskAction}
+    tree := behave.New(repeat)
+    
+    // Keep ticking until the tree fails
+    for tree.Status() != behave.Failure {
+        status := tree.Tick()
+        fmt.Printf("Tree status: %s\n", status.String())
+    }
+    
+    fmt.Printf("Stopped after %d rounds!\n", rounds)
+}
 ```
 
 ## Reset Functionality

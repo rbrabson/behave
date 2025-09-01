@@ -697,3 +697,463 @@ func TestComplexBehaviorTreeWithNewNodes(t *testing.T) {
 		}
 	}
 }
+
+func TestRetry_Tick(t *testing.T) {
+	tests := []struct {
+		name           string
+		child          Node
+		expected       Status
+		description    string
+		tickCount      int
+		expectedStatus []Status
+	}{
+		{
+			name:           "no child",
+			child:          nil,
+			expected:       Failure,
+			description:    "should fail when no child is provided",
+			tickCount:      1,
+			expectedStatus: []Status{Failure},
+		},
+		{
+			name:           "child succeeds immediately",
+			child:          &Action{Run: func() Status { return Success }},
+			expected:       Success,
+			description:    "should succeed when child succeeds",
+			tickCount:      1,
+			expectedStatus: []Status{Success},
+		},
+		{
+			name:           "child running",
+			child:          &Action{Run: func() Status { return Running }},
+			expected:       Running,
+			description:    "should return Running when child is running",
+			tickCount:      1,
+			expectedStatus: []Status{Running},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			retry := &Retry{Child: test.child}
+
+			for i, expectedStatus := range test.expectedStatus {
+				status := retry.Tick()
+				if status != expectedStatus {
+					t.Errorf("Retry.Tick() call %d = %v, want %v", i+1, status, expectedStatus)
+				}
+				if retry.Status() != expectedStatus {
+					t.Errorf("Retry.Status() after Tick() call %d = %v, want %v", i+1, retry.Status(), expectedStatus)
+				}
+			}
+		})
+	}
+}
+
+func TestRetry_FailureRetry(t *testing.T) {
+	// Test that Retry keeps trying when child fails
+	failCount := 0
+	maxFails := 3
+
+	child := &Action{
+		Run: func() Status {
+			failCount++
+			if failCount <= maxFails {
+				return Failure
+			}
+			return Success
+		},
+	}
+
+	retry := &Retry{Child: child}
+
+	// First few ticks should return Running (retrying after failure)
+	for i := 0; i < maxFails; i++ {
+		status := retry.Tick()
+		if status != Running {
+			t.Errorf("Retry.Tick() call %d = %v, want %v (should keep retrying)", i+1, status, Running)
+		}
+		if retry.Status() != Running {
+			t.Errorf("Retry.Status() after failed attempt %d = %v, want %v", i+1, retry.Status(), Running)
+		}
+	}
+
+	// Final tick should succeed
+	status := retry.Tick()
+	if status != Success {
+		t.Errorf("Retry.Tick() final call = %v, want %v", status, Success)
+	}
+	if retry.Status() != Success {
+		t.Errorf("Retry.Status() after success = %v, want %v", retry.Status(), Success)
+	}
+
+	// Verify child was called the expected number of times
+	expectedCalls := maxFails + 1 // failures + final success
+	if failCount != expectedCalls {
+		t.Errorf("Child was called %d times, want %d", failCount, expectedCalls)
+	}
+}
+
+func TestRetry_ChildReset(t *testing.T) {
+	// Test that Retry resets child after each failure
+	resetCount := 0
+	tickCount := 0
+
+	child := &Action{
+		Run: func() Status {
+			tickCount++
+			if tickCount <= 2 {
+				return Failure
+			}
+			return Success
+		},
+	}
+
+	// Track reset calls by wrapping in a custom node
+	resetTracker := &testNode{
+		tickFunc: func() Status {
+			return child.Tick()
+		},
+		resetFunc: func() Status {
+			resetCount++
+			return child.Reset()
+		},
+		statusFunc: func() Status {
+			return child.Status()
+		},
+		stringFunc: func() string {
+			return child.String()
+		},
+	}
+
+	retry := &Retry{Child: resetTracker}
+
+	// First tick should fail and trigger reset
+	status1 := retry.Tick()
+	if status1 != Running {
+		t.Errorf("First Retry.Tick() = %v, want %v", status1, Running)
+	}
+	if resetCount != 1 {
+		t.Errorf("Reset count after first failure = %d, want 1", resetCount)
+	}
+
+	// Second tick should fail and trigger reset
+	status2 := retry.Tick()
+	if status2 != Running {
+		t.Errorf("Second Retry.Tick() = %v, want %v", status2, Running)
+	}
+	if resetCount != 2 {
+		t.Errorf("Reset count after second failure = %d, want 2", resetCount)
+	}
+
+	// Third tick should succeed
+	status3 := retry.Tick()
+	if status3 != Success {
+		t.Errorf("Third Retry.Tick() = %v, want %v", status3, Success)
+	}
+	// No additional reset should occur on success
+	if resetCount != 2 {
+		t.Errorf("Reset count after success = %d, want 2", resetCount)
+	}
+}
+
+// Helper test node for tracking method calls
+type testNode struct {
+	tickFunc   func() Status
+	resetFunc  func() Status
+	statusFunc func() Status
+	stringFunc func() string
+}
+
+func (t *testNode) Tick() Status   { return t.tickFunc() }
+func (t *testNode) Reset() Status  { return t.resetFunc() }
+func (t *testNode) Status() Status { return t.statusFunc() }
+func (t *testNode) String() string { return t.stringFunc() }
+
+func TestRetry_Reset(t *testing.T) {
+	child := &Action{Run: func() Status { return Failure }}
+	retry := &Retry{Child: child}
+
+	// Set some status first
+	retry.Tick()
+
+	// Reset should set status to Ready
+	status := retry.Reset()
+	if status != Ready {
+		t.Errorf("Retry.Reset() = %v, want %v", status, Ready)
+	}
+	if retry.Status() != Ready {
+		t.Errorf("Retry.Status() after Reset() = %v, want %v", retry.Status(), Ready)
+	}
+}
+
+func TestRetry_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		retry    *Retry
+		contains []string
+	}{
+		{
+			name:     "no child",
+			retry:    &Retry{Child: nil},
+			contains: []string{"Retry", "Ready"},
+		},
+		{
+			name:     "with child",
+			retry:    &Retry{Child: &Action{Run: func() Status { return Success }}},
+			contains: []string{"Retry", "Ready", "Action"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			str := test.retry.String()
+			for _, expected := range test.contains {
+				if !strings.Contains(str, expected) {
+					t.Errorf("Retry.String() should contain '%s', got %v", expected, str)
+				}
+			}
+		})
+	}
+}
+
+func TestRepeat_Tick(t *testing.T) {
+	tests := []struct {
+		name     string
+		repeat   *Repeat
+		expected Status
+	}{
+		{
+			name:     "no child",
+			repeat:   &Repeat{},
+			expected: Failure,
+		},
+		{
+			name: "child succeeds first time",
+			repeat: &Repeat{
+				Child: &Action{Run: func() Status { return Success }},
+			},
+			expected: Running, // Should continue running after success
+		},
+		{
+			name: "child fails",
+			repeat: &Repeat{
+				Child: &Action{Run: func() Status { return Failure }},
+			},
+			expected: Failure,
+		},
+		{
+			name: "child running",
+			repeat: &Repeat{
+				Child: &Action{Run: func() Status { return Running }},
+			},
+			expected: Running,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			status := test.repeat.Tick()
+			if status != test.expected {
+				t.Errorf("Repeat.Tick() = %v, want %v", status, test.expected)
+			}
+			if test.repeat.Status() != test.expected {
+				t.Errorf("Repeat.Status() after Tick() = %v, want %v", test.repeat.Status(), test.expected)
+			}
+		})
+	}
+}
+
+func TestRepeat_RepeatsUntilFailure(t *testing.T) {
+	callCount := 0
+	var action *Action
+	action = &Action{
+		Run: func() Status {
+			callCount++
+			if callCount < 3 {
+				return Success // Succeed first 2 times
+			}
+			return Failure // Fail on the 3rd call
+		},
+	}
+
+	repeat := &Repeat{Child: action}
+
+	// First tick: child succeeds, repeat should return Running and reset child
+	status := repeat.Tick()
+	if status != Running {
+		t.Errorf("First Repeat.Tick() = %v, want %v", status, Running)
+	}
+	if callCount != 1 {
+		t.Errorf("After first tick, callCount = %v, want 1", callCount)
+	}
+
+	// Second tick: child succeeds again, repeat should return Running and reset child
+	status = repeat.Tick()
+	if status != Running {
+		t.Errorf("Second Repeat.Tick() = %v, want %v", status, Running)
+	}
+	if callCount != 2 {
+		t.Errorf("After second tick, callCount = %v, want 2", callCount)
+	}
+
+	// Third tick: child fails, repeat should return Failure
+	status = repeat.Tick()
+	if status != Failure {
+		t.Errorf("Third Repeat.Tick() = %v, want %v", status, Failure)
+	}
+	if callCount != 3 {
+		t.Errorf("After third tick, callCount = %v, want 3", callCount)
+	}
+}
+
+func TestRepeat_ChildReset(t *testing.T) {
+	child := &Action{
+		Run: func() Status {
+			return Success
+		},
+	}
+
+	// Create a repeat node
+	repeat := &Repeat{Child: child}
+
+	// Tick multiple times - each success should cause a reset
+	// We can't directly test the reset calls, but we can verify the behavior
+	// by checking that the child is in Ready state after each success
+
+	// First tick - child succeeds
+	status1 := repeat.Tick()
+	if status1 != Running {
+		t.Errorf("First tick should return Running, got %v", status1)
+	}
+
+	// Child should be reset to Ready state after success
+	if child.Status() != Ready {
+		t.Errorf("Child status after first success should be Ready, got %v", child.Status())
+	}
+
+	// Second tick - child succeeds again
+	status2 := repeat.Tick()
+	if status2 != Running {
+		t.Errorf("Second tick should return Running, got %v", status2)
+	}
+
+	// Child should be reset to Ready state again after success
+	if child.Status() != Ready {
+		t.Errorf("Child status after second success should be Ready, got %v", child.Status())
+	}
+}
+
+func TestRepeat_Reset(t *testing.T) {
+	child := &Action{Run: func() Status { return Success }}
+	repeat := &Repeat{Child: child}
+
+	// Set some status first
+	repeat.Tick()
+
+	// Reset should set status to Ready
+	status := repeat.Reset()
+	if status != Ready {
+		t.Errorf("Repeat.Reset() = %v, want %v", status, Ready)
+	}
+	if repeat.Status() != Ready {
+		t.Errorf("Repeat.Status() after Reset() = %v, want %v", repeat.Status(), Ready)
+	}
+}
+
+func TestRepeat_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		repeat   *Repeat
+		contains []string
+	}{
+		{
+			name:     "no child",
+			repeat:   &Repeat{},
+			contains: []string{"Repeat", "Ready"},
+		},
+		{
+			name: "with child",
+			repeat: &Repeat{
+				Child: &Action{Run: func() Status { return Success }},
+			},
+			contains: []string{"Repeat", "Ready", "Action"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			str := test.repeat.String()
+			for _, expected := range test.contains {
+				if !strings.Contains(str, expected) {
+					t.Errorf("Repeat.String() should contain '%s', got %v", expected, str)
+				}
+			}
+		})
+	}
+}
+
+func TestComplexBehaviorTreeWithRepeat(t *testing.T) {
+	// Create a behavior tree that uses Repeat with other node types
+	attempts := 0
+
+	// Sequence that succeeds a few times then fails
+	taskSequence := &Sequence{
+		Children: []Node{
+			&Condition{Check: func() Status {
+				attempts++
+				return Success // Always pass condition
+			}},
+			&Action{Run: func() Status {
+				if attempts <= 3 {
+					return Success // Succeed first 3 times
+				}
+				return Failure // Fail after that
+			}},
+		},
+	}
+
+	// Wrap sequence in Repeat
+	repeat := &Repeat{Child: taskSequence}
+
+	// Create behavior tree
+	bt := New(repeat)
+
+	// Test initial state
+	if bt.Status() != Ready {
+		t.Errorf("Initial BehaviorTree.Status() = %v, want %v", bt.Status(), Ready)
+	}
+
+	// Tick until failure
+	var finalStatus Status
+	tickCount := 0
+	for tickCount < 10 { // Safety limit
+		finalStatus = bt.Tick()
+		tickCount++
+		if finalStatus == Failure {
+			break
+		}
+		if finalStatus != Running {
+			t.Errorf("Expected Running status during repeat, got %v", finalStatus)
+		}
+	}
+
+	// Should eventually fail
+	if finalStatus != Failure {
+		t.Errorf("Expected final status to be Failure, got %v", finalStatus)
+	}
+
+	// Should have attempted at least 4 times (3 successes + 1 failure)
+	if attempts < 4 {
+		t.Errorf("Expected at least 4 attempts, got %d", attempts)
+	}
+
+	// Verify string representation includes Repeat
+	str := bt.String()
+	if !strings.Contains(str, "Repeat") {
+		t.Errorf("BehaviorTree.String() should contain 'Repeat', got %v", str)
+	}
+	if !strings.Contains(str, "Sequence") {
+		t.Errorf("BehaviorTree.String() should contain 'Sequence', got %v", str)
+	}
+}

@@ -112,6 +112,16 @@ func (bt *BehaviorTree) String() string {
 			for _, child := range n.Children {
 				printNode(child, depth+1)
 			}
+		case *Retry:
+			builder.WriteString("Retry (" + n.Status().String() + ")")
+			if n.Child != nil {
+				printNode(n.Child, depth+1)
+			}
+		case *Repeat:
+			builder.WriteString("Repeat (" + n.Status().String() + ")")
+			if n.Child != nil {
+				printNode(n.Child, depth+1)
+			}
 		default:
 			builder.WriteString("Unknown\n")
 		}
@@ -282,7 +292,7 @@ func (c *Composite) String() string {
 	return builder.String()
 }
 
-// Sequence is a Node that runs its children in order until one fails or is running.
+// Sequence is a Node that runs its children in order and succeeds if all children succeed.
 type Sequence struct {
 	Children []Node
 	status   Status
@@ -332,7 +342,7 @@ func (s *Sequence) String() string {
 	return builder.String()
 }
 
-// Selector is a Node that runs its children in order until one succeeds or is running.
+// Selector is a Node that runs its children in order and succeeds if at least one child succeeds.
 type Selector struct {
 	Children []Node
 	status   Status
@@ -474,6 +484,130 @@ func (p *Parallel) String() string {
 	for _, child := range p.Children {
 		builder.WriteString("\n  ")
 		builder.WriteString(child.String())
+	}
+	return builder.String()
+}
+
+// Retry represents a decorator node that retries its child until it succeeds,
+// ignoring all failures. It returns Success when the child succeeds, Running
+// while the child is running, and keeps retrying (returning Running) when the
+// child fails.
+type Retry struct {
+	Child  Node
+	status Status
+}
+
+// Tick executes the Retry node, running its child until it succeeds.
+func (r *Retry) Tick() Status {
+	if r.Child == nil {
+		r.status = Failure
+		return r.status
+	}
+
+	childStatus := r.Child.Tick()
+	switch childStatus {
+	case Success:
+		r.status = Success
+		return r.status
+	case Running:
+		r.status = Running
+		return r.status
+	case Failure:
+		// Ignore failure, reset child and keep trying
+		r.Child.Reset()
+		r.status = Running
+		return r.status
+	default:
+		r.status = Running
+		return r.status
+	}
+}
+
+// Reset resets the Retry node and its child to the Ready state.
+func (r *Retry) Reset() Status {
+	r.status = Ready
+	if r.Child != nil {
+		r.Child.Reset()
+	}
+	return r.status
+}
+
+// Status returns the current status of the Retry node.
+func (r *Retry) Status() Status {
+	return r.status
+}
+
+// String returns a string representation of the Retry node.
+func (r *Retry) String() string {
+	var builder strings.Builder
+	builder.WriteString("Retry (")
+	builder.WriteString(r.Status().String())
+	builder.WriteString(")")
+	if r.Child != nil {
+		builder.WriteString("\n  ")
+		builder.WriteString(r.Child.String())
+	}
+	return builder.String()
+}
+
+// Repeat represents a decorator node that repeats its child until it fails.
+// It returns Running while the child succeeds (and resets it for the next iteration),
+// Running while the child is running, and Failure when the child fails.
+type Repeat struct {
+	Child  Node
+	status Status
+}
+
+// Tick executes the Repeat node, running its child repeatedly until it fails.
+func (rp *Repeat) Tick() Status {
+	if rp.Child == nil {
+		rp.status = Failure
+		return rp.status
+	}
+
+	childStatus := rp.Child.Tick()
+	switch childStatus {
+	case Success:
+		// Child succeeded, reset it and continue repeating
+		rp.Child.Reset()
+		rp.status = Running
+		return rp.status
+	case Running:
+		rp.status = Running
+		return rp.status
+	case Failure:
+		// Child failed, we're done
+		rp.status = Failure
+		return rp.status
+	default:
+		rp.status = Failure
+		return rp.status
+	}
+}
+
+// Reset resets the Repeat node and its child to the Ready state.
+func (rp *Repeat) Reset() Status {
+	rp.status = Ready
+	if rp.Child != nil {
+		rp.Child.Reset()
+	}
+	return rp.status
+}
+
+// Status returns the current status of the Repeat node.
+func (rp *Repeat) Status() Status {
+	return rp.status
+}
+
+// String returns a string representation of the Repeat node.
+func (rp *Repeat) String() string {
+	var builder strings.Builder
+	builder.WriteString("Repeat (")
+	builder.WriteString(rp.Status().String())
+	builder.WriteString(")")
+	if rp.Child != nil {
+		builder.WriteString("\n  ")
+		builder.WriteString(rp.Child.String())
 	}
 	return builder.String()
 }
