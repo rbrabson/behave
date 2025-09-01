@@ -91,10 +91,8 @@ func (bt *BehaviorTree) String() string {
 			builder.WriteString("Condition (" + n.Status().String() + ")")
 		case *Composite:
 			builder.WriteString("Composite (" + n.Status().String() + ")")
-			for _, condition := range n.Conditions {
-				if condition != nil {
-					printNode(condition, depth+1)
-				}
+			for i := range n.Conditions {
+				printNode(&n.Conditions[i], depth+1)
 			}
 			if n.Child != nil {
 				printNode(n.Child, depth+1)
@@ -217,7 +215,7 @@ func (c *Condition) String() string {
 // Composite is a node that combines multiple conditions with any other node.
 // It first checks all conditions, and if they all succeed, runs the child node.
 type Composite struct {
-	Conditions []*Condition
+	Conditions []Condition
 	Child      Node
 	status     Status
 }
@@ -240,11 +238,8 @@ func (c *Composite) Tick() Status {
 	}
 
 	// Check all conditions first (like a sequence - all must succeed)
-	for _, condition := range c.Conditions {
-		if condition == nil {
-			continue
-		}
-		conditionStatus := condition.Tick()
+	for i := range c.Conditions {
+		conditionStatus := c.Conditions[i].Tick()
 		switch conditionStatus {
 		case Success:
 			// This condition succeeded, continue to next condition
@@ -274,10 +269,8 @@ func (c *Composite) Tick() Status {
 
 // Reset resets the Composite node and its conditions and child node to their initial state.
 func (c *Composite) Reset() Status {
-	for _, condition := range c.Conditions {
-		if condition != nil {
-			condition.Reset()
-		}
+	for i := range c.Conditions {
+		c.Conditions[i].Reset()
 	}
 	if c.Child != nil {
 		c.Child.Reset()
@@ -295,10 +288,8 @@ func (c *Composite) Status() Status {
 func (c *Composite) String() string {
 	var builder strings.Builder
 	builder.WriteString("Composite (" + c.Status().String() + ")")
-	for i, condition := range c.Conditions {
-		if condition != nil {
-			builder.WriteString("\n  Condition[" + strconv.Itoa(i) + "]: " + condition.String())
-		}
+	for i := range c.Conditions {
+		builder.WriteString("\n  Condition[" + strconv.Itoa(i) + "]: " + c.Conditions[i].String())
 	}
 	if c.Child != nil {
 		builder.WriteString("\n  Child: " + c.Child.String())

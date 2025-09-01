@@ -302,7 +302,7 @@ func TestComplexBehaviorTree(t *testing.T) {
 func TestComposite_Tick(t *testing.T) {
 	tests := []struct {
 		name       string
-		conditions []*Condition
+		conditions []Condition
 		child      Node
 		expected   Status
 	}{
@@ -326,37 +326,37 @@ func TestComposite_Tick(t *testing.T) {
 		},
 		{
 			name:       "single condition succeeds, no child",
-			conditions: []*Condition{{Check: func() Status { return Success }}},
+			conditions: []Condition{{Check: func() Status { return Success }}},
 			child:      nil,
 			expected:   Success,
 		},
 		{
 			name:       "single condition succeeds, child succeeds",
-			conditions: []*Condition{{Check: func() Status { return Success }}},
+			conditions: []Condition{{Check: func() Status { return Success }}},
 			child:      &Action{Run: func() Status { return Success }},
 			expected:   Success,
 		},
 		{
 			name:       "single condition succeeds, child fails",
-			conditions: []*Condition{{Check: func() Status { return Success }}},
+			conditions: []Condition{{Check: func() Status { return Success }}},
 			child:      &Action{Run: func() Status { return Failure }},
 			expected:   Failure,
 		},
 		{
 			name:       "single condition fails, child not executed",
-			conditions: []*Condition{{Check: func() Status { return Failure }}},
+			conditions: []Condition{{Check: func() Status { return Failure }}},
 			child:      &Action{Run: func() Status { return Success }},
 			expected:   Failure,
 		},
 		{
 			name:       "single condition running",
-			conditions: []*Condition{{Check: func() Status { return Running }}},
+			conditions: []Condition{{Check: func() Status { return Running }}},
 			child:      &Action{Run: func() Status { return Success }},
 			expected:   Running,
 		},
 		{
 			name: "multiple conditions all succeed, child succeeds",
-			conditions: []*Condition{
+			conditions: []Condition{
 				{Check: func() Status { return Success }},
 				{Check: func() Status { return Success }},
 			},
@@ -365,7 +365,7 @@ func TestComposite_Tick(t *testing.T) {
 		},
 		{
 			name: "multiple conditions, first fails",
-			conditions: []*Condition{
+			conditions: []Condition{
 				{Check: func() Status { return Failure }},
 				{Check: func() Status { return Success }},
 			},
@@ -374,7 +374,7 @@ func TestComposite_Tick(t *testing.T) {
 		},
 		{
 			name: "multiple conditions, second fails",
-			conditions: []*Condition{
+			conditions: []Condition{
 				{Check: func() Status { return Success }},
 				{Check: func() Status { return Failure }},
 			},
@@ -383,7 +383,7 @@ func TestComposite_Tick(t *testing.T) {
 		},
 		{
 			name: "multiple conditions, first running",
-			conditions: []*Condition{
+			conditions: []Condition{
 				{Check: func() Status { return Running }},
 				{Check: func() Status { return Success }},
 			},
@@ -407,7 +407,7 @@ func TestComposite_Tick(t *testing.T) {
 }
 
 func TestComposite_Reset(t *testing.T) {
-	conditions := []*Condition{{Check: func() Status { return Success }}}
+	conditions := []Condition{{Check: func() Status { return Success }}}
 	child := &Action{Run: func() Status { return Success }}
 	composite := &Composite{Conditions: conditions, Child: child}
 
@@ -672,12 +672,12 @@ func TestComplexBehaviorTreeWithNewNodes(t *testing.T) {
 	// Composite 1: Check health > 50 AND heal if needed
 	healthCheck := &Condition{Check: func() Status { return Success }} // Health > 50
 	healAction := &Action{Run: func() Status { return Success }}       // Heal action
-	composite1 := &Composite{Conditions: []*Condition{healthCheck}, Child: healAction}
+	composite1 := &Composite{Conditions: []Condition{*healthCheck}, Child: healAction}
 
 	// Composite 2: Check enemy nearby AND attack
 	enemyCheck := &Condition{Check: func() Status { return Success }} // Enemy nearby
 	attackAction := &Action{Run: func() Status { return Success }}    // Attack action
-	composite2 := &Composite{Conditions: []*Condition{enemyCheck}, Child: attackAction}
+	composite2 := &Composite{Conditions: []Condition{*enemyCheck}, Child: attackAction}
 
 	// Parallel node: Execute both composites, need at least 1 to succeed
 	parallel := &Parallel{
