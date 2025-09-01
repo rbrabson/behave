@@ -990,8 +990,7 @@ func TestRepeat_Tick(t *testing.T) {
 
 func TestRepeat_RepeatsUntilFailure(t *testing.T) {
 	callCount := 0
-	var action *Action
-	action = &Action{
+	action := &Action{
 		Run: func() Status {
 			callCount++
 			if callCount < 3 {
