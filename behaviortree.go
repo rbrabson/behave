@@ -91,8 +91,10 @@ func (bt *BehaviorTree) String() string {
 			builder.WriteString("Condition (" + n.Status().String() + ")")
 		case *Composite:
 			builder.WriteString("Composite (" + n.Status().String() + ")")
-			if n.Condition != nil {
-				printNode(n.Condition, depth+1)
+			for _, condition := range n.Conditions {
+				if condition != nil {
+					printNode(condition, depth+1)
+				}
 			}
 			if n.Child != nil {
 				printNode(n.Child, depth+1)
@@ -212,23 +214,23 @@ func (c *Condition) String() string {
 	return builder.String()
 }
 
-// Composite is a node that combines a condition and any other node.
-// It first checks the condition, and if it succeeds, runs the child node.
+// Composite is a node that combines multiple conditions with any other node.
+// It first checks all conditions, and if they all succeed, runs the child node.
 type Composite struct {
-	Condition Node
-	Child     Node
-	status    Status
+	Conditions []*Condition
+	Child      Node
+	status     Status
 }
 
-// Tick executes the composite by first checking the condition, then running the child node if condition succeeds.
+// Tick executes the composite by first checking all conditions, then running the child node if all conditions succeed.
 func (c *Composite) Tick() Status {
-	if c.Condition == nil && c.Child == nil {
+	if len(c.Conditions) == 0 && c.Child == nil {
 		c.status = Failure
 		return c.status
 	}
 
-	// If no condition, just run the child node
-	if c.Condition == nil {
+	// If no conditions, just run the child node
+	if len(c.Conditions) == 0 {
 		if c.Child != nil {
 			c.status = c.Child.Tick()
 			return c.status
@@ -237,35 +239,45 @@ func (c *Composite) Tick() Status {
 		return c.status
 	}
 
-	// Check the condition first
-	conditionStatus := c.Condition.Tick()
-	switch conditionStatus {
-	case Success:
-		// Condition succeeded, run the child node
-		if c.Child != nil {
-			c.status = c.Child.Tick()
+	// Check all conditions first (like a sequence - all must succeed)
+	for _, condition := range c.Conditions {
+		if condition == nil {
+			continue
+		}
+		conditionStatus := condition.Tick()
+		switch conditionStatus {
+		case Success:
+			// This condition succeeded, continue to next condition
+			continue
+		case Running:
+			// This condition is still running
+			c.status = Running
+			return c.status
+		case Failure, Ready:
+			// This condition failed or not ready, composite fails
+			c.status = Failure
+			return c.status
+		default:
+			c.status = Failure
 			return c.status
 		}
-		c.status = Success
-		return c.status
-	case Running:
-		// Condition is still running
-		c.status = Running
-		return c.status
-	case Failure, Ready:
-		// Condition failed or not ready, composite fails
-		c.status = Failure
-		return c.status
-	default:
-		c.status = Failure
+	}
+
+	// All conditions succeeded, run the child node
+	if c.Child != nil {
+		c.status = c.Child.Tick()
 		return c.status
 	}
+	c.status = Success
+	return c.status
 }
 
-// Reset resets the Composite node and its condition and child node to their initial state.
+// Reset resets the Composite node and its conditions and child node to their initial state.
 func (c *Composite) Reset() Status {
-	if c.Condition != nil {
-		c.Condition.Reset()
+	for _, condition := range c.Conditions {
+		if condition != nil {
+			condition.Reset()
+		}
 	}
 	if c.Child != nil {
 		c.Child.Reset()
@@ -283,8 +295,10 @@ func (c *Composite) Status() Status {
 func (c *Composite) String() string {
 	var builder strings.Builder
 	builder.WriteString("Composite (" + c.Status().String() + ")")
-	if c.Condition != nil {
-		builder.WriteString("\n  Condition: " + c.Condition.String())
+	for i, condition := range c.Conditions {
+		if condition != nil {
+			builder.WriteString("\n  Condition[" + strconv.Itoa(i) + "]: " + condition.String())
+		}
 	}
 	if c.Child != nil {
 		builder.WriteString("\n  Child: " + c.Child.String())
