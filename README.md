@@ -48,6 +48,7 @@ type Node interface {
 - **Retry**: Retries its child until it succeeds, ignoring all failures. Returns Success when child succeeds, Running while retrying.
 - **Repeat**: Repeats its child until it fails. Returns Running while child succeeds (and resets it), Failure when child fails.
 - **RepeatN**: Executes its child a specific number of times before returning the child's last result. Returns Running until MaxCount is reached.
+- **WhileSuccess**: Returns Running as long as its child is either Running or Success, and returns Failure otherwise. Useful for creating loops.
 - **Invert**: Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
 - **AlwaysSuccess**: Always returns Success regardless of its child's result. Useful for ensuring a branch always succeeds.
 - **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
@@ -122,6 +123,11 @@ retry := &behave.Retry{
 repeatN := &behave.RepeatN{
     MaxCount: 3,
     Child: &behave.Action{Run: limitedFunc},
+}
+
+// Keep running while child succeeds or is running
+whileSuccess := &behave.WhileSuccess{
+    Child: &behave.Condition{Check: keepGoingFunc},
 }
 
 // Invert a condition (succeeds when condition fails)
@@ -403,6 +409,93 @@ func main() {
     fmt.Println("=== Running selector with always-failing condition ===")
     status = fallbackTree.Tick()
     fmt.Printf("Final result: %s\n", status.String())
+}
+```
+
+## WhileSuccess Node Example
+
+The WhileSuccess node creates loops that continue while a condition remains true or while an action keeps succeeding:
+
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "time"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    attempts := 0
+    maxAttempts := 5
+    
+    // Condition that succeeds a limited number of times
+    resourceCheck := &behave.Condition{
+        Check: func() behave.Status {
+            attempts++
+            fmt.Printf("Attempt %d: ", attempts)
+            
+            if attempts <= maxAttempts {
+                fmt.Println("Resources available - continuing!")
+                return behave.Success
+            }
+            
+            fmt.Println("Resources depleted - stopping!")
+            return behave.Failure
+        },
+    }
+    
+    // WhileSuccess will keep running as long as resources are available
+    whileSuccess := &behave.WhileSuccess{Child: resourceCheck}
+    
+    tree := behave.New(whileSuccess)
+    
+    fmt.Println("=== WhileSuccess Loop Example ===")
+    
+    // Keep ticking until the condition fails
+    for tree.Status() != behave.Failure {
+        status := tree.Tick()
+        fmt.Printf("Tree status: %s\n", status.String())
+        
+        // Add a small delay to see the loop in action
+        time.Sleep(100 * time.Millisecond)
+    }
+    
+    fmt.Printf("Loop completed after %d attempts!\n\n", attempts)
+    
+    // Example with an action that sometimes fails
+    taskAttempts := 0
+    
+    unreliableTask := &behave.Action{
+        Run: func() behave.Status {
+            taskAttempts++
+            fmt.Printf("Task attempt %d: ", taskAttempts)
+            
+            // 70% chance of success
+            if rand.Float32() < 0.7 {
+                fmt.Println("Task succeeded!")
+                return behave.Success
+            }
+            
+            fmt.Println("Task failed - stopping loop!")
+            return behave.Failure
+        },
+    }
+    
+    whileTaskSuccess := &behave.WhileSuccess{Child: unreliableTask}
+    taskTree := behave.New(whileTaskSuccess)
+    
+    fmt.Println("=== WhileSuccess with Unreliable Task ===")
+    
+    // Keep ticking until the task fails
+    for taskTree.Status() != behave.Failure {
+        status := taskTree.Tick()
+        fmt.Printf("Task tree status: %s\n", status.String())
+        time.Sleep(100 * time.Millisecond)
+    }
+    
+    fmt.Printf("Task loop completed after %d attempts!\n", taskAttempts)
 }
 ```
 

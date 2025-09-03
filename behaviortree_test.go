@@ -1984,3 +1984,235 @@ func TestComplexBehaviorTreeWithRepeatN(t *testing.T) {
 		t.Errorf("BehaviorTree.String() should show execution count '3/3', got %v", str)
 	}
 }
+
+func TestWhileSuccess_Tick(t *testing.T) {
+	tests := []struct {
+		name           string
+		child          Node
+		childResults   []Status
+		expectedStatus []Status
+		description    string
+	}{
+		{
+			name:           "no child",
+			child:          nil,
+			childResults:   []Status{},
+			expectedStatus: []Status{Failure},
+			description:    "should fail when no child is provided",
+		},
+		{
+			name: "child succeeds continuously",
+			child: &Action{Run: func() Status {
+				return Success
+			}},
+			childResults:   []Status{Success, Success, Success},
+			expectedStatus: []Status{Running, Running, Running},
+			description:    "should keep running while child succeeds",
+		},
+		{
+			name: "child fails after success",
+			child: &Action{Run: func() Status {
+				return Failure
+			}},
+			childResults:   []Status{Failure},
+			expectedStatus: []Status{Failure},
+			description:    "should fail when child fails",
+		},
+		{
+			name: "child running",
+			child: &Action{Run: func() Status {
+				return Running
+			}},
+			childResults:   []Status{Running, Running},
+			expectedStatus: []Status{Running, Running},
+			description:    "should keep running while child is running",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			whileSuccess := &WhileSuccess{Child: test.child}
+
+			for i, expectedStatus := range test.expectedStatus {
+				status := whileSuccess.Tick()
+				if status != expectedStatus {
+					t.Errorf("Tick %d: expected %v, got %v", i+1, expectedStatus, status)
+				}
+				if whileSuccess.Status() != expectedStatus {
+					t.Errorf("Status() after tick %d: expected %v, got %v", i+1, expectedStatus, whileSuccess.Status())
+				}
+			}
+		})
+	}
+}
+
+func TestWhileSuccess_ChildReset(t *testing.T) {
+	executions := 0
+	action := &Action{
+		Run: func() Status {
+			executions++
+			if executions <= 3 {
+				return Success
+			}
+			return Failure
+		},
+	}
+
+	whileSuccess := &WhileSuccess{Child: action}
+
+	// Execute multiple times - should reset child after each success
+	for i := 0; i < 3; i++ {
+		status := whileSuccess.Tick()
+		if status != Running {
+			t.Errorf("Tick %d: expected Running, got %v", i+1, status)
+		}
+	}
+
+	// On the 4th tick, the action should fail
+	status := whileSuccess.Tick()
+	if status != Failure {
+		t.Errorf("Final tick: expected Failure, got %v", status)
+	}
+
+	// Verify that executions count matches expected (child was reset after each success)
+	if executions != 4 {
+		t.Errorf("Expected 4 executions, got %d", executions)
+	}
+}
+
+func TestWhileSuccess_Reset(t *testing.T) {
+	action := &Action{Run: func() Status { return Success }}
+	whileSuccess := &WhileSuccess{Child: action}
+
+	// Execute once
+	whileSuccess.Tick()
+	if whileSuccess.Status() != Running {
+		t.Errorf("Expected Running after tick, got %v", whileSuccess.Status())
+	}
+
+	// Reset
+	status := whileSuccess.Reset()
+	if status != Ready {
+		t.Errorf("Reset() should return Ready, got %v", status)
+	}
+	if whileSuccess.Status() != Ready {
+		t.Errorf("Status() after Reset() should be Ready, got %v", whileSuccess.Status())
+	}
+}
+
+func TestWhileSuccess_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		child    Node
+		expected string
+	}{
+		{
+			name:     "no child",
+			child:    nil,
+			expected: "WhileSuccess (Ready)",
+		},
+		{
+			name:     "with child",
+			child:    &Action{Run: func() Status { return Success }},
+			expected: "WhileSuccess (Ready)\n  Action (Ready)",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			whileSuccess := &WhileSuccess{Child: test.child}
+			result := whileSuccess.String()
+			if result != test.expected {
+				t.Errorf("String() = %q, want %q", result, test.expected)
+			}
+		})
+	}
+}
+
+func TestWhileSuccess_MixedResults(t *testing.T) {
+	results := []Status{Success, Success, Running, Running, Failure}
+	currentResult := 0
+
+	action := &Action{
+		Run: func() Status {
+			if currentResult >= len(results) {
+				return Failure
+			}
+			result := results[currentResult]
+			currentResult++
+			return result
+		},
+	}
+
+	whileSuccess := &WhileSuccess{Child: action}
+
+	// Should return Running for Success, Success, Running, Running
+	for i := 0; i < 4; i++ {
+		status := whileSuccess.Tick()
+		if status != Running {
+			t.Errorf("Tick %d: expected Running, got %v", i+1, status)
+		}
+	}
+
+	// Should return Failure when child returns Failure
+	status := whileSuccess.Tick()
+	if status != Failure {
+		t.Errorf("Final tick: expected Failure, got %v", status)
+	}
+}
+
+func TestComplexBehaviorTreeWithWhileSuccess(t *testing.T) {
+	attempts := 0
+	maxAttempts := 3
+
+	// Action that succeeds a few times then fails
+	limitedAction := &Action{
+		Run: func() Status {
+			attempts++
+			if attempts <= maxAttempts {
+				return Success
+			}
+			return Failure
+		},
+	}
+
+	// WhileSuccess decorator
+	whileSuccess := &WhileSuccess{Child: limitedAction}
+
+	// Fallback action
+	fallback := &Action{
+		Run: func() Status {
+			return Success
+		},
+	}
+
+	// Selector: try whileSuccess, fall back to simple action
+	selector := &Selector{
+		Children: []Node{whileSuccess, fallback},
+	}
+
+	bt := New(selector)
+
+	// First few ticks should keep the WhileSuccess running
+	for i := 0; i < maxAttempts; i++ {
+		status := bt.Tick()
+		if status != Running {
+			t.Errorf("Tick %d: expected Running, got %v", i+1, status)
+		}
+	}
+
+	// Next tick should cause WhileSuccess to fail and selector to use fallback
+	status := bt.Tick()
+	if status != Success {
+		t.Errorf("Expected Success from fallback, got %v", status)
+	}
+
+	// Test string representation
+	str := bt.String()
+	expectedParts := []string{"BehaviorTree", "Selector", "WhileSuccess", "Action"}
+	for _, part := range expectedParts {
+		if !strings.Contains(str, part) {
+			t.Errorf("BehaviorTree.String() should contain '%s', got %v", part, str)
+		}
+	}
+}

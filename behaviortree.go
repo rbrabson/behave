@@ -142,6 +142,11 @@ func (bt *BehaviorTree) String() string {
 			if n.Child != nil {
 				printNode(n.Child, depth+1)
 			}
+		case *WhileSuccess:
+			builder.WriteString("WhileSuccess (" + n.Status().String() + ")")
+			if n.Child != nil {
+				printNode(n.Child, depth+1)
+			}
 		default:
 			builder.WriteString("Unknown\n")
 		}
@@ -880,6 +885,66 @@ func (rn *RepeatN) String() string {
 	if rn.Child != nil {
 		builder.WriteString("\n  ")
 		builder.WriteString(rn.Child.String())
+	}
+	return builder.String()
+}
+
+// WhileSuccess represents a decorator node that returns Running as long as its child
+// is either Running or Success, and returns Failure otherwise.
+// This is useful for creating loops that continue while a condition remains true.
+type WhileSuccess struct {
+	Child  Node
+	status Status
+}
+
+// Tick executes the WhileSuccess node, running its child and continuing while it succeeds or runs.
+func (ws *WhileSuccess) Tick() Status {
+	if ws.Child == nil {
+		ws.status = Failure
+		return ws.status
+	}
+
+	// Execute the child
+	childStatus := ws.Child.Tick()
+
+	// Continue running if child is Running or Success
+	if childStatus == Running || childStatus == Success {
+		// If child succeeded, reset it for the next iteration and return Running
+		if childStatus == Success {
+			ws.Child.Reset()
+		}
+		ws.status = Running
+		return ws.status
+	}
+
+	// Child failed (or returned Ready), so we fail
+	ws.status = Failure
+	return ws.status
+}
+
+// Reset resets the WhileSuccess node and its child to the Ready state.
+func (ws *WhileSuccess) Reset() Status {
+	ws.status = Ready
+	if ws.Child != nil {
+		ws.Child.Reset()
+	}
+	return ws.status
+}
+
+// Status returns the current status of the WhileSuccess node.
+func (ws *WhileSuccess) Status() Status {
+	return ws.status
+}
+
+// String returns a string representation of the WhileSuccess node.
+func (ws *WhileSuccess) String() string {
+	var builder strings.Builder
+	builder.WriteString("WhileSuccess (")
+	builder.WriteString(ws.status.String())
+	builder.WriteString(")")
+	if ws.Child != nil {
+		builder.WriteString("\n  ")
+		builder.WriteString(ws.Child.String())
 	}
 	return builder.String()
 }
