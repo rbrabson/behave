@@ -1,6 +1,7 @@
 package behave
 
 import (
+	"context"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -1021,16 +1022,24 @@ func (wf *WhileFailure) String() string {
 // Log represents a decorator node that executes its child and logs the result.
 // It's useful for debugging and monitoring behavior tree execution.
 type Log struct {
-	Child   Node
-	Message string // Optional custom message for logging
-	status  Status
+	Child    Node
+	Message  string      // Optional custom message for logging
+	LogLevel *slog.Level // Optional custom log level. If nil, uses default levels based on child status
+	status   Status
 }
 
 // Tick executes the Log node, running its child and logging the result.
 func (l *Log) Tick() Status {
 	if l.Child == nil {
 		l.status = Failure
-		slog.Warn("Log node has no child", "status", l.status.String())
+
+		// Log with custom level if specified, otherwise use Warn for no child
+		logLevel := slog.LevelWarn
+		if l.LogLevel != nil {
+			logLevel = *l.LogLevel
+		}
+
+		slog.Log(context.Background(), logLevel, "Log node has no child", "status", l.status.String())
 		return l.status
 	}
 
@@ -1044,17 +1053,26 @@ func (l *Log) Tick() Status {
 		message = "Log node executed"
 	}
 
-	// Log with appropriate level based on status
-	switch childStatus {
-	case Success:
-		slog.Info(message, "child_status", childStatus.String(), "child_type", l.getChildType())
-	case Failure:
-		slog.Warn(message, "child_status", childStatus.String(), "child_type", l.getChildType())
-	case Running:
-		slog.Debug(message, "child_status", childStatus.String(), "child_type", l.getChildType())
-	case Ready:
-		slog.Debug(message, "child_status", childStatus.String(), "child_type", l.getChildType())
+	// Determine log level - use custom level if specified, otherwise use defaults based on status
+	var logLevel slog.Level
+	if l.LogLevel != nil {
+		logLevel = *l.LogLevel
+	} else {
+		// Default log levels based on child status
+		switch childStatus {
+		case Success:
+			logLevel = slog.LevelInfo
+		case Failure:
+			logLevel = slog.LevelWarn
+		case Running, Ready:
+			logLevel = slog.LevelDebug
+		}
 	}
+
+	// Log with the determined level
+	slog.Log(context.Background(), logLevel, message,
+		"child_status", childStatus.String(),
+		"child_type", l.getChildType())
 
 	return l.status
 }
@@ -1108,7 +1126,14 @@ func (l *Log) Reset() Status {
 	if l.Child != nil {
 		l.Child.Reset()
 	}
-	slog.Debug("Log node reset", "message", l.Message)
+
+	// Log reset with custom level if specified, otherwise use Debug
+	logLevel := slog.LevelDebug
+	if l.LogLevel != nil {
+		logLevel = *l.LogLevel
+	}
+
+	slog.Log(context.Background(), logLevel, "Log node reset", "message", l.Message)
 	return l.status
 }
 
@@ -1126,6 +1151,10 @@ func (l *Log) String() string {
 		builder.WriteString(", \"")
 		builder.WriteString(l.Message)
 		builder.WriteString("\"")
+	}
+	if l.LogLevel != nil {
+		builder.WriteString(", Level:")
+		builder.WriteString(l.LogLevel.String())
 	}
 	builder.WriteString(")")
 	if l.Child != nil {

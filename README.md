@@ -53,7 +53,7 @@ type Node interface {
 - **Invert**: Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
 - **AlwaysSuccess**: Always returns Success regardless of its child's result. Useful for ensuring a branch always succeeds.
 - **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
-- **Log**: Executes its child and logs the result using structured logging (slog). Returns the child's status unchanged. Useful for debugging and monitoring.
+- **Log**: Executes its child and logs the result using structured logging (slog). Returns the child's status unchanged. Supports custom log levels or uses defaults (Info for Success, Warn for Failure, Debug for Running/Ready). Useful for debugging and monitoring.
 
 ### BehaviorTree
 
@@ -156,6 +156,7 @@ alwaysFailure := &behave.AlwaysFailure{
 loggedAction := &behave.Log{
     Child:   &behave.Action{Run: importantFunc},
     Message: "Executing critical operation",
+    LogLevel: func() *slog.Level { l := slog.LevelError; return &l }(), // Custom error level
 }
 
 tree := behave.New(par)
@@ -614,7 +615,10 @@ func main() {
 
 ## Log Node Example
 
-The Log node provides structured logging for debugging and monitoring behavior tree execution:
+The Log node provides structured logging for debugging and monitoring behavior tree execution. It supports custom log levels or uses intelligent defaults:
+
+- **Default Levels**: Info for Success, Warn for Failure, Debug for Running/Ready
+- **Custom Levels**: Override defaults by setting the LogLevel field
 
 ```go
 package main
@@ -660,10 +664,29 @@ func main() {
         Message: "Critical system operation",
     }
     
+    // Example with custom log level - always log at ERROR level for high priority
+    highPriorityOperation := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("High priority task executed")
+            return behave.Success
+        },
+    }
+    
+    errorLevelLog := &behave.Log{
+        Child:    highPriorityOperation,
+        Message:  "High priority operation",
+        LogLevel: func() *slog.Level { l := slog.LevelError; return &l }(), // Always ERROR level
+    }
+    
     // Retry with logging
     retryWithLogging := &behave.Retry{Child: loggedOperation}
     
-    tree := behave.New(retryWithLogging)
+    // Sequence: run both operations
+    sequence := &behave.Sequence{
+        Children: []behave.Node{retryWithLogging, errorLevelLog},
+    }
+    
+    tree := behave.New(sequence)
     
     // Execute until success
     for tree.Status() != behave.Success {
@@ -673,12 +696,12 @@ func main() {
         }
     }
     
-    fmt.Printf("Operation completed after %d attempts\n", attempts)
+    fmt.Printf("Operations completed after %d attempts\n", attempts)
     
     // Example 2: Complex behavior tree with multiple logged components
     fmt.Println("\n=== Complex Tree with Logging ===")
     
-    // Database connection with logging
+    // Database connection with logging (default levels)
     dbConnections := 0
     dbConnect := &behave.Log{
         Child: &behave.Action{
@@ -691,9 +714,10 @@ func main() {
             },
         },
         Message: "Database connection attempt",
+        // Uses default levels: WARN for Failure, INFO for Success
     }
     
-    // API call with logging
+    // API call with custom INFO level (always log at INFO regardless of result)
     apiCalls := 0
     apiCall := &behave.Log{
         Child: &behave.Action{
@@ -702,17 +726,19 @@ func main() {
                 return behave.Success
             },
         },
-        Message: "External API call",
+        Message:  "External API call",
+        LogLevel: func() *slog.Level { l := slog.LevelInfo; return &l }(),
     }
     
-    // Data processing with logging
+    // Data processing with custom ERROR level (high importance)
     dataProcess := &behave.Log{
         Child: &behave.Action{
             Run: func() behave.Status {
                 return behave.Success
             },
         },
-        Message: "Data processing step",
+        Message:  "Data processing step",
+        LogLevel: func() *slog.Level { l := slog.LevelError; return &l }(),
     }
     
     // Sequence with logged steps

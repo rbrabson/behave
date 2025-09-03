@@ -2690,6 +2690,171 @@ func TestLog_LoggingBehavior(t *testing.T) {
 	}
 }
 
+func TestLog_CustomLogLevel(t *testing.T) {
+	tests := []struct {
+		name        string
+		child       Node
+		message     string
+		logLevel    *slog.Level
+		childStatus Status
+		description string
+	}{
+		{
+			name:        "custom error level for success",
+			child:       &Action{Run: func() Status { return Success }},
+			message:     "Custom level test",
+			logLevel:    func() *slog.Level { l := slog.LevelError; return &l }(),
+			childStatus: Success,
+			description: "should use custom ERROR level even for success",
+		},
+		{
+			name:        "custom info level for failure",
+			child:       &Action{Run: func() Status { return Failure }},
+			message:     "Info level failure",
+			logLevel:    func() *slog.Level { l := slog.LevelInfo; return &l }(),
+			childStatus: Failure,
+			description: "should use custom INFO level even for failure",
+		},
+		{
+			name:        "custom debug level for running",
+			child:       &Action{Run: func() Status { return Running }},
+			message:     "Debug level running",
+			logLevel:    func() *slog.Level { l := slog.LevelDebug; return &l }(),
+			childStatus: Running,
+			description: "should use custom DEBUG level for running",
+		},
+		{
+			name:        "nil log level uses defaults",
+			child:       &Action{Run: func() Status { return Success }},
+			message:     "Default level test",
+			logLevel:    nil,
+			childStatus: Success,
+			description: "should use default INFO level for success when LogLevel is nil",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			log := &Log{
+				Child:    test.child,
+				Message:  test.message,
+				LogLevel: test.logLevel,
+			}
+
+			status := log.Tick()
+			if status != test.childStatus {
+				t.Errorf("Log.Tick() = %v, want %v (%s)", status, test.childStatus, test.description)
+			}
+			if log.Status() != test.childStatus {
+				t.Errorf("Log.Status() = %v, want %v", log.Status(), test.childStatus)
+			}
+		})
+	}
+}
+
+func TestLog_CustomLogLevelNoChild(t *testing.T) {
+	// Test custom log level when no child is present
+	customLevel := slog.LevelError
+	log := &Log{
+		Child:    nil,
+		Message:  "No child test",
+		LogLevel: &customLevel,
+	}
+
+	status := log.Tick()
+	if status != Failure {
+		t.Errorf("Log.Tick() with no child = %v, want Failure", status)
+	}
+
+	// Test that string representation includes log level
+	str := log.String()
+	if !strings.Contains(str, "Level:ERROR") {
+		t.Errorf("Log.String() should contain 'Level:ERROR', got %v", str)
+	}
+}
+
+func TestLog_StringWithLogLevel(t *testing.T) {
+	tests := []struct {
+		name     string
+		child    Node
+		message  string
+		logLevel *slog.Level
+		expected []string
+	}{
+		{
+			name:     "with custom error level",
+			child:    &Action{Run: func() Status { return Success }},
+			message:  "Error level test",
+			logLevel: func() *slog.Level { l := slog.LevelError; return &l }(),
+			expected: []string{"Log", "Success", "Error level test", "Level:ERROR", "Action"},
+		},
+		{
+			name:     "with custom debug level",
+			child:    &Action{Run: func() Status { return Running }},
+			message:  "Debug level test",
+			logLevel: func() *slog.Level { l := slog.LevelDebug; return &l }(),
+			expected: []string{"Log", "Running", "Debug level test", "Level:DEBUG", "Action"},
+		},
+		{
+			name:     "no custom level specified",
+			child:    &Action{Run: func() Status { return Success }},
+			message:  "Default level test",
+			logLevel: nil,
+			expected: []string{"Log", "Success", "Default level test", "Action"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			log := &Log{
+				Child:    test.child,
+				Message:  test.message,
+				LogLevel: test.logLevel,
+			}
+			if test.child != nil {
+				log.Tick() // Execute to set status
+			}
+
+			str := log.String()
+			for _, expected := range test.expected {
+				if expected != "" && !strings.Contains(str, expected) {
+					t.Errorf("Log.String() should contain '%s', got %v", expected, str)
+				}
+			}
+
+			// If no custom level, should NOT contain "Level:"
+			if test.logLevel == nil && strings.Contains(str, "Level:") {
+				t.Errorf("Log.String() should not contain 'Level:' when no custom level set, got %v", str)
+			}
+		})
+	}
+}
+
+func TestLog_ResetWithCustomLevel(t *testing.T) {
+	customLevel := slog.LevelInfo
+	action := &Action{Run: func() Status { return Success }}
+	log := &Log{
+		Child:    action,
+		Message:  "Reset test with custom level",
+		LogLevel: &customLevel,
+	}
+
+	// Execute and verify
+	status := log.Tick()
+	if status != Success {
+		t.Errorf("Expected Success after tick, got %v", status)
+	}
+
+	// Reset and verify
+	resetStatus := log.Reset()
+	if resetStatus != Ready {
+		t.Errorf("Reset() = %v, want Ready", resetStatus)
+	}
+	if log.Status() != Ready {
+		t.Errorf("Status() after Reset() = %v, want Ready", log.Status())
+	}
+}
+
 func TestComplexBehaviorTreeWithLog(t *testing.T) {
 	executions := 0
 
