@@ -82,6 +82,593 @@ func main() {
 }
 ```
 
+## Action Node Example
+
+The Action node is the most basic leaf node that performs an operation:
+
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    attempts := 0
+    
+    // Simple action that always succeeds
+    simpleAction := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Simple action executed!")
+            return behave.Success
+        },
+    }
+    
+    // Action that might fail
+    unreliableAction := &behave.Action{
+        Run: func() behave.Status {
+            attempts++
+            fmt.Printf("Unreliable action attempt %d: ", attempts)
+            
+            if rand.Float32() < 0.3 { // 30% success rate
+                fmt.Println("Success!")
+                return behave.Success
+            }
+            
+            fmt.Println("Failed!")
+            return behave.Failure
+        },
+    }
+    
+    // Long-running action
+    ticks := 0
+    longRunningAction := &behave.Action{
+        Run: func() behave.Status {
+            ticks++
+            fmt.Printf("Long running action tick %d: ", ticks)
+            
+            if ticks < 3 {
+                fmt.Println("Still running...")
+                return behave.Running
+            }
+            
+            fmt.Println("Completed!")
+            return behave.Success
+        },
+    }
+    
+    // Test simple action
+    tree1 := behave.New(simpleAction)
+    fmt.Println("=== Simple Action ===")
+    fmt.Printf("Result: %s\n\n", tree1.Tick().String())
+    
+    // Test unreliable action
+    tree2 := behave.New(unreliableAction)
+    fmt.Println("=== Unreliable Action ===")
+    for tree2.Status() != behave.Success && attempts < 5 {
+        tree2.Tick()
+        tree2.Reset() // Reset for next attempt
+    }
+    fmt.Printf("Final result: %s\n\n", tree2.Status().String())
+    
+    // Test long-running action
+    tree3 := behave.New(longRunningAction)
+    fmt.Println("=== Long Running Action ===")
+    for tree3.Status() != behave.Success {
+        status := tree3.Tick()
+        fmt.Printf("Status: %s\n", status.String())
+    }
+}
+```
+
+## Condition Node Example
+
+The Condition node checks a condition and returns Success or Failure (never Running):
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    // System state
+    temperature := 20.0
+    isSystemReady := false
+    
+    // Simple condition check
+    temperatureCheck := &behave.Condition{
+        Check: func() behave.Status {
+            fmt.Printf("Checking temperature: %.1f°C\n", temperature)
+            if temperature < 25.0 {
+                fmt.Println("Temperature OK")
+                return behave.Success
+            }
+            fmt.Println("Temperature too high!")
+            return behave.Failure
+        },
+    }
+    
+    // System readiness check
+    readinessCheck := &behave.Condition{
+        Check: func() behave.Status {
+            fmt.Printf("System ready: %t\n", isSystemReady)
+            if isSystemReady {
+                return behave.Success
+            }
+            return behave.Failure
+        },
+    }
+    
+    // Complex condition with multiple factors
+    complexCheck := &behave.Condition{
+        Check: func() behave.Status {
+            hour := time.Now().Hour()
+            fmt.Printf("Current hour: %d\n", hour)
+            
+            // Business hours check (9 AM to 5 PM)
+            if hour >= 9 && hour < 17 {
+                fmt.Println("Within business hours")
+                return behave.Success
+            }
+            
+            fmt.Println("Outside business hours")
+            return behave.Failure
+        },
+    }
+    
+    // Test temperature condition
+    fmt.Println("=== Temperature Check ===")
+    tree1 := behave.New(temperatureCheck)
+    fmt.Printf("Result: %s\n\n", tree1.Tick().String())
+    
+    // Change temperature and test again
+    temperature = 30.0
+    tree1.Reset()
+    fmt.Printf("After temperature change: %s\n\n", tree1.Tick().String())
+    
+    // Test system readiness
+    fmt.Println("=== System Readiness Check ===")
+    tree2 := behave.New(readinessCheck)
+    fmt.Printf("Before system ready: %s\n", tree2.Tick().String())
+    
+    isSystemReady = true
+    tree2.Reset()
+    fmt.Printf("After system ready: %s\n\n", tree2.Tick().String())
+    
+    // Test complex condition
+    fmt.Println("=== Business Hours Check ===")
+    tree3 := behave.New(complexCheck)
+    fmt.Printf("Result: %s\n", tree3.Tick().String())
+}
+```
+
+## Sequence Node Example
+
+The Sequence node executes children in order, failing if any child fails:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    step := 0
+    
+    // Create sequence steps
+    step1 := &behave.Action{
+        Run: func() behave.Status {
+            step++
+            fmt.Printf("Step 1: Initialize (step=%d)\n", step)
+            return behave.Success
+        },
+    }
+    
+    step2 := &behave.Action{
+        Run: func() behave.Status {
+            step++
+            fmt.Printf("Step 2: Process (step=%d)\n", step)
+            return behave.Success
+        },
+    }
+    
+    step3 := &behave.Action{
+        Run: func() behave.Status {
+            step++
+            fmt.Printf("Step 3: Finalize (step=%d)\n", step)
+            return behave.Success
+        },
+    }
+    
+    // Successful sequence
+    successSequence := &behave.Sequence{
+        Children: []behave.Node{step1, step2, step3},
+    }
+    
+    fmt.Println("=== Successful Sequence ===")
+    tree1 := behave.New(successSequence)
+    status := tree1.Tick()
+    fmt.Printf("Final result: %s\n\n", status.String())
+    
+    // Sequence with failure
+    step = 0
+    failingStep := &behave.Action{
+        Run: func() behave.Status {
+            step++
+            fmt.Printf("Failing step (step=%d)\n", step)
+            return behave.Failure
+        },
+    }
+    
+    remainingStep := &behave.Action{
+        Run: func() behave.Status {
+            step++
+            fmt.Printf("This should not execute (step=%d)\n", step)
+            return behave.Success
+        },
+    }
+    
+    failureSequence := &behave.Sequence{
+        Children: []behave.Node{step1, failingStep, remainingStep},
+    }
+    
+    fmt.Println("=== Sequence with Failure ===")
+    tree2 := behave.New(failureSequence)
+    status = tree2.Tick()
+    fmt.Printf("Final result: %s (step=%d)\n\n", status.String(), step)
+    
+    // Sequence with running state
+    step = 0
+    runningTicks := 0
+    runningStep := &behave.Action{
+        Run: func() behave.Status {
+            runningTicks++
+            fmt.Printf("Running step tick %d\n", runningTicks)
+            if runningTicks < 3 {
+                return behave.Running
+            }
+            return behave.Success
+        },
+    }
+    
+    runningSequence := &behave.Sequence{
+        Children: []behave.Node{step1, runningStep, step3},
+    }
+    
+    fmt.Println("=== Sequence with Running State ===")
+    tree3 := behave.New(runningSequence)
+    for tree3.Status() != behave.Success {
+        status = tree3.Tick()
+        fmt.Printf("Status: %s\n", status.String())
+    }
+}
+```
+
+## Selector Node Example
+
+The Selector node tries children in order until one succeeds:
+
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    attempt := 0
+    
+    // Primary option (might fail)
+    primaryOption := &behave.Action{
+        Run: func() behave.Status {
+            attempt++
+            fmt.Printf("Primary option attempt %d: ", attempt)
+            
+            if rand.Float32() < 0.3 { // 30% success rate
+                fmt.Println("Success!")
+                return behave.Success
+            }
+            
+            fmt.Println("Failed!")
+            return behave.Failure
+        },
+    }
+    
+    // Secondary option (more reliable)
+    secondaryOption := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Secondary option: Success!")
+            return behave.Success
+        },
+    }
+    
+    // Fallback option (always works)
+    fallbackOption := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Fallback option: Success!")
+            return behave.Success
+        },
+    }
+    
+    // Create selector with fallback chain
+    selector := &behave.Selector{
+        Children: []behave.Node{primaryOption, secondaryOption, fallbackOption},
+    }
+    
+    fmt.Println("=== Selector Fallback Chain ===")
+    tree := behave.New(selector)
+    status := tree.Tick()
+    fmt.Printf("Final result: %s\n\n", status.String())
+    
+    // Selector where all options fail
+    failingOption1 := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Option 1: Failed!")
+            return behave.Failure
+        },
+    }
+    
+    failingOption2 := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Option 2: Failed!")
+            return behave.Failure
+        },
+    }
+    
+    failingSelector := &behave.Selector{
+        Children: []behave.Node{failingOption1, failingOption2},
+    }
+    
+    fmt.Println("=== All Options Fail ===")
+    tree2 := behave.New(failingSelector)
+    status = tree2.Tick()
+    fmt.Printf("Final result: %s\n\n", status.String())
+    
+    // Selector with running state
+    runningTicks := 0
+    runningOption := &behave.Action{
+        Run: func() behave.Status {
+            runningTicks++
+            fmt.Printf("Running option tick %d: ", runningTicks)
+            
+            if runningTicks < 2 {
+                fmt.Println("Still running...")
+                return behave.Running
+            }
+            
+            fmt.Println("Success!")
+            return behave.Success
+        },
+    }
+    
+    notExecutedOption := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("This should not execute")
+            return behave.Success
+        },
+    }
+    
+    runningSelector := &behave.Selector{
+        Children: []behave.Node{runningOption, notExecutedOption},
+    }
+    
+    fmt.Println("=== Selector with Running State ===")
+    tree3 := behave.New(runningSelector)
+    for tree3.Status() != behave.Success {
+        status = tree3.Tick()
+        fmt.Printf("Status: %s\n", status.String())
+    }
+}
+```
+
+## Parallel Node Example
+
+The Parallel node runs all children simultaneously and succeeds when enough children succeed:
+
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    // Create parallel tasks
+    task1Ticks := 0
+    task1 := &behave.Action{
+        Run: func() behave.Status {
+            task1Ticks++
+            fmt.Printf("Task 1 tick %d: ", task1Ticks)
+            
+            if task1Ticks < 2 {
+                fmt.Println("Running...")
+                return behave.Running
+            }
+            
+            fmt.Println("Success!")
+            return behave.Success
+        },
+    }
+    
+    task2 := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Task 2: Quick success!")
+            return behave.Success
+        },
+    }
+    
+    task3Ticks := 0
+    task3 := &behave.Action{
+        Run: func() behave.Status {
+            task3Ticks++
+            fmt.Printf("Task 3 tick %d: ", task3Ticks)
+            
+            if rand.Float32() < 0.5 { // 50% failure rate
+                fmt.Println("Failed!")
+                return behave.Failure
+            }
+            
+            fmt.Println("Success!")
+            return behave.Success
+        },
+    }
+    
+    // Parallel requiring 2 out of 3 successes
+    parallel := &behave.Parallel{
+        MinSuccessCount: 2,
+        Children: []behave.Node{task1, task2, task3},
+    }
+    
+    fmt.Println("=== Parallel Execution (2 out of 3 needed) ===")
+    tree := behave.New(parallel)
+    for tree.Status() == behave.Ready || tree.Status() == behave.Running {
+        status := tree.Tick()
+        fmt.Printf("Parallel status: %s\n", status.String())
+        fmt.Println("---")
+    }
+    
+    fmt.Printf("Final result: %s\n\n", tree.Status().String())
+    
+    // Parallel requiring all children to succeed
+    task1Ticks = 0
+    task3Ticks = 0
+    
+    allSucceedParallel := &behave.Parallel{
+        MinSuccessCount: 3, // All must succeed
+        Children: []behave.Node{task1, task2, task3},
+    }
+    
+    fmt.Println("=== Parallel Execution (All must succeed) ===")
+    tree2 := behave.New(allSucceedParallel)
+    for i := 0; i < 5 && (tree2.Status() == behave.Ready || tree2.Status() == behave.Running); i++ {
+        status := tree2.Tick()
+        fmt.Printf("Parallel status: %s\n", status.String())
+        if status != behave.Running {
+            break
+        }
+        fmt.Println("---")
+    }
+    
+    fmt.Printf("Final result: %s\n", tree2.Status().String())
+}
+```
+
+## Composite Node Example
+
+The Composite node combines a condition with another node, executing the child only if the condition succeeds:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    // System state
+    hasPermission := false
+    resourceAvailable := true
+    taskExecuted := false
+    
+    // Permission check condition
+    permissionCheck := &behave.Condition{
+        Check: func() behave.Status {
+            fmt.Printf("Checking permission: %t\n", hasPermission)
+            if hasPermission {
+                fmt.Println("Permission granted!")
+                return behave.Success
+            }
+            fmt.Println("Permission denied!")
+            return behave.Failure
+        },
+    }
+    
+    // Protected action
+    protectedAction := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Executing protected action...")
+            taskExecuted = true
+            return behave.Success
+        },
+    }
+    
+    // Composite: only execute action if permission check passes
+    guardedExecution := &behave.Composite{
+        Condition: permissionCheck,
+        Child:     protectedAction,
+    }
+    
+    fmt.Println("=== Composite without Permission ===")
+    tree1 := behave.New(guardedExecution)
+    status := tree1.Tick()
+    fmt.Printf("Result: %s, Task executed: %t\n\n", status.String(), taskExecuted)
+    
+    // Grant permission and try again
+    hasPermission = true
+    taskExecuted = false
+    
+    fmt.Println("=== Composite with Permission ===")
+    tree1.Reset()
+    status = tree1.Tick()
+    fmt.Printf("Result: %s, Task executed: %t\n\n", status.String(), taskExecuted)
+    
+    // More complex example with multiple conditions
+    resourceCheck := &behave.Condition{
+        Check: func() behave.Status {
+            fmt.Printf("Resource available: %t\n", resourceAvailable)
+            if resourceAvailable {
+                return behave.Success
+            }
+            return behave.Failure
+        },
+    }
+    
+    // Multiple condition checks in sequence
+    multiConditionCheck := &behave.Sequence{
+        Children: []behave.Node{permissionCheck, resourceCheck},
+    }
+    
+    criticalAction := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Executing critical action...")
+            return behave.Success
+        },
+    }
+    
+    // Composite with multiple conditions
+    complexGuard := &behave.Composite{
+        Condition: multiConditionCheck,
+        Child:     criticalAction,
+    }
+    
+    fmt.Println("=== Composite with Multiple Conditions ===")
+    tree2 := behave.New(complexGuard)
+    status = tree2.Tick()
+    fmt.Printf("Result: %s\n\n", status.String())
+    
+    // Test with resource unavailable
+    resourceAvailable = false
+    
+    fmt.Println("=== Composite with Resource Unavailable ===")
+    tree2.Reset()
+    status = tree2.Tick()
+    fmt.Printf("Result: %s\n", status.String())
+}
+```
+
 ## Tree Structure Example
 
 You can compose trees using different node types:
