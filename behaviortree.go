@@ -1,6 +1,7 @@
 package behave
 
 import (
+	"log/slog"
 	"strconv"
 	"strings"
 )
@@ -146,6 +147,8 @@ func (bt *BehaviorTree) String() string {
 			builder.WriteString("WhileSuccess (" + n.Status().String() + ")")
 		case *WhileFailure:
 			builder.WriteString("WhileFailure (" + n.Status().String() + ")")
+		case *Log:
+			builder.WriteString("Log (" + n.Status().String() + ")")
 			if n.Child != nil {
 				printNode(n.Child, depth+1)
 			}
@@ -1011,6 +1014,123 @@ func (wf *WhileFailure) String() string {
 	if wf.Child != nil {
 		builder.WriteString("\n  ")
 		builder.WriteString(wf.Child.String())
+	}
+	return builder.String()
+}
+
+// Log represents a decorator node that executes its child and logs the result.
+// It's useful for debugging and monitoring behavior tree execution.
+type Log struct {
+	Child   Node
+	Message string // Optional custom message for logging
+	status  Status
+}
+
+// Tick executes the Log node, running its child and logging the result.
+func (l *Log) Tick() Status {
+	if l.Child == nil {
+		l.status = Failure
+		slog.Warn("Log node has no child", "status", l.status.String())
+		return l.status
+	}
+
+	// Execute the child
+	childStatus := l.Child.Tick()
+	l.status = childStatus
+
+	// Log the result with context
+	message := l.Message
+	if message == "" {
+		message = "Log node executed"
+	}
+
+	// Log with appropriate level based on status
+	switch childStatus {
+	case Success:
+		slog.Info(message, "child_status", childStatus.String(), "child_type", l.getChildType())
+	case Failure:
+		slog.Warn(message, "child_status", childStatus.String(), "child_type", l.getChildType())
+	case Running:
+		slog.Debug(message, "child_status", childStatus.String(), "child_type", l.getChildType())
+	case Ready:
+		slog.Debug(message, "child_status", childStatus.String(), "child_type", l.getChildType())
+	}
+
+	return l.status
+}
+
+// getChildType returns a string representation of the child node type for logging
+func (l *Log) getChildType() string {
+	if l.Child == nil {
+		return "nil"
+	}
+
+	// Use type assertion to get the actual type name
+	switch l.Child.(type) {
+	case *Action:
+		return "Action"
+	case *Condition:
+		return "Condition"
+	case *Sequence:
+		return "Sequence"
+	case *Selector:
+		return "Selector"
+	case *Parallel:
+		return "Parallel"
+	case *Composite:
+		return "Composite"
+	case *Retry:
+		return "Retry"
+	case *Repeat:
+		return "Repeat"
+	case *RepeatN:
+		return "RepeatN"
+	case *Invert:
+		return "Invert"
+	case *AlwaysSuccess:
+		return "AlwaysSuccess"
+	case *AlwaysFailure:
+		return "AlwaysFailure"
+	case *WhileSuccess:
+		return "WhileSuccess"
+	case *WhileFailure:
+		return "WhileFailure"
+	case *Log:
+		return "Log"
+	default:
+		return "Unknown"
+	}
+}
+
+// Reset resets the Log node and its child to the Ready state.
+func (l *Log) Reset() Status {
+	l.status = Ready
+	if l.Child != nil {
+		l.Child.Reset()
+	}
+	slog.Debug("Log node reset", "message", l.Message)
+	return l.status
+}
+
+// Status returns the current status of the Log node.
+func (l *Log) Status() Status {
+	return l.status
+}
+
+// String returns a string representation of the Log node.
+func (l *Log) String() string {
+	var builder strings.Builder
+	builder.WriteString("Log (")
+	builder.WriteString(l.status.String())
+	if l.Message != "" {
+		builder.WriteString(", \"")
+		builder.WriteString(l.Message)
+		builder.WriteString("\"")
+	}
+	builder.WriteString(")")
+	if l.Child != nil {
+		builder.WriteString("\n  ")
+		builder.WriteString(l.Child.String())
 	}
 	return builder.String()
 }

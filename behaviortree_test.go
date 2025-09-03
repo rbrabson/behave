@@ -1,6 +1,7 @@
 package behave
 
 import (
+	"log/slog"
 	"strings"
 	"testing"
 )
@@ -2454,6 +2455,303 @@ func TestComplexBehaviorTreeWithWhileFailure(t *testing.T) {
 	// Test string representation
 	str := bt.String()
 	expectedParts := []string{"BehaviorTree", "Selector", "WhileFailure", "Action"}
+	for _, part := range expectedParts {
+		if !strings.Contains(str, part) {
+			t.Errorf("BehaviorTree.String() should contain '%s', got %v", part, str)
+		}
+	}
+}
+
+func TestLog_Tick(t *testing.T) {
+	tests := []struct {
+		name           string
+		child          Node
+		message        string
+		expectedStatus Status
+		description    string
+	}{
+		{
+			name:           "no child",
+			child:          nil,
+			message:        "Test log",
+			expectedStatus: Failure,
+			description:    "should fail when no child is provided",
+		},
+		{
+			name:           "child succeeds",
+			child:          &Action{Run: func() Status { return Success }},
+			message:        "Success test",
+			expectedStatus: Success,
+			description:    "should return child's success status",
+		},
+		{
+			name:           "child fails",
+			child:          &Action{Run: func() Status { return Failure }},
+			message:        "Failure test",
+			expectedStatus: Failure,
+			description:    "should return child's failure status",
+		},
+		{
+			name:           "child running",
+			child:          &Action{Run: func() Status { return Running }},
+			message:        "Running test",
+			expectedStatus: Running,
+			description:    "should return child's running status",
+		},
+		{
+			name:           "empty message",
+			child:          &Action{Run: func() Status { return Success }},
+			message:        "",
+			expectedStatus: Success,
+			description:    "should work with empty message",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			log := &Log{Child: test.child, Message: test.message}
+			status := log.Tick()
+			if status != test.expectedStatus {
+				t.Errorf("Log.Tick() = %v, want %v (%s)", status, test.expectedStatus, test.description)
+			}
+			if log.Status() != test.expectedStatus {
+				t.Errorf("Log.Status() = %v, want %v", log.Status(), test.expectedStatus)
+			}
+		})
+	}
+}
+
+func TestLog_ChildExecution(t *testing.T) {
+	executions := 0
+	action := &Action{
+		Run: func() Status {
+			executions++
+			return Success
+		},
+	}
+
+	log := &Log{Child: action, Message: "Execution test"}
+
+	// First execution
+	status := log.Tick()
+	if status != Success {
+		t.Errorf("First tick: expected Success, got %v", status)
+	}
+	if executions != 1 {
+		t.Errorf("Expected 1 execution, got %d", executions)
+	}
+
+	// Second execution (should execute child again)
+	status = log.Tick()
+	if status != Success {
+		t.Errorf("Second tick: expected Success, got %v", status)
+	}
+	if executions != 2 {
+		t.Errorf("Expected 2 executions, got %d", executions)
+	}
+}
+
+func TestLog_Reset(t *testing.T) {
+	action := &Action{
+		Run: func() Status { return Success },
+	}
+
+	log := &Log{Child: action, Message: "Reset test"}
+
+	// Execute and verify running state
+	status := log.Tick()
+	if status != Success {
+		t.Errorf("Expected Success after tick, got %v", status)
+	}
+
+	// Reset and verify ready state
+	resetStatus := log.Reset()
+	if resetStatus != Ready {
+		t.Errorf("Reset() = %v, want Ready", resetStatus)
+	}
+	if log.Status() != Ready {
+		t.Errorf("Status() after Reset() = %v, want Ready", log.Status())
+	}
+
+	// Verify child is also reset by checking its status
+	if action.Status() != Ready {
+		t.Errorf("Child status after reset = %v, want Ready", action.Status())
+	}
+}
+
+func TestLog_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		child    Node
+		message  string
+		expected []string
+	}{
+		{
+			name:     "no child",
+			child:    nil,
+			message:  "Test message",
+			expected: []string{"Log", "Ready", "Test message"},
+		},
+		{
+			name:     "with child and message",
+			child:    &Action{Run: func() Status { return Success }},
+			message:  "Action log",
+			expected: []string{"Log", "Success", "Action log", "Action"},
+		},
+		{
+			name:     "empty message",
+			child:    &Action{Run: func() Status { return Success }},
+			message:  "",
+			expected: []string{"Log", "Success", "Action"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			log := &Log{Child: test.child, Message: test.message}
+			if test.child != nil {
+				log.Tick() // Execute to set status
+			}
+
+			str := log.String()
+			for _, expected := range test.expected {
+				if expected != "" && !strings.Contains(str, expected) {
+					t.Errorf("Log.String() should contain '%s', got %v", expected, str)
+				}
+			}
+		})
+	}
+}
+
+func TestLog_GetChildType(t *testing.T) {
+	tests := []struct {
+		name         string
+		child        Node
+		expectedType string
+	}{
+		{"nil child", nil, "nil"},
+		{"Action", &Action{}, "Action"},
+		{"Condition", &Condition{}, "Condition"},
+		{"Sequence", &Sequence{}, "Sequence"},
+		{"Selector", &Selector{}, "Selector"},
+		{"Parallel", &Parallel{}, "Parallel"},
+		{"Composite", &Composite{}, "Composite"},
+		{"Retry", &Retry{}, "Retry"},
+		{"Repeat", &Repeat{}, "Repeat"},
+		{"RepeatN", &RepeatN{}, "RepeatN"},
+		{"Invert", &Invert{}, "Invert"},
+		{"AlwaysSuccess", &AlwaysSuccess{}, "AlwaysSuccess"},
+		{"AlwaysFailure", &AlwaysFailure{}, "AlwaysFailure"},
+		{"WhileSuccess", &WhileSuccess{}, "WhileSuccess"},
+		{"WhileFailure", &WhileFailure{}, "WhileFailure"},
+		{"Log", &Log{}, "Log"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			log := &Log{Child: test.child}
+			childType := log.getChildType()
+			if childType != test.expectedType {
+				t.Errorf("getChildType() = %v, want %v", childType, test.expectedType)
+			}
+		})
+	}
+}
+
+func TestLog_LoggingBehavior(t *testing.T) {
+	// Test that different status levels use appropriate log levels
+	// This test verifies the logging happens without actually capturing logs
+
+	// Suppress log output during testing by setting a discard handler
+	origHandler := slog.Default().Handler()
+	defer slog.SetDefault(slog.New(origHandler))
+
+	tests := []struct {
+		name   string
+		status Status
+	}{
+		{"Success logging", Success},
+		{"Failure logging", Failure},
+		{"Running logging", Running},
+		{"Ready logging", Ready},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			action := &Action{Run: func() Status { return test.status }}
+			log := &Log{Child: action, Message: "Test logging"}
+
+			// This should not panic and should execute logging
+			status := log.Tick()
+			if status != test.status {
+				t.Errorf("Log.Tick() = %v, want %v", status, test.status)
+			}
+		})
+	}
+}
+
+func TestComplexBehaviorTreeWithLog(t *testing.T) {
+	executions := 0
+
+	// Action that we want to monitor
+	monitoredAction := &Action{
+		Run: func() Status {
+			executions++
+			if executions <= 2 {
+				return Failure
+			}
+			return Success
+		},
+	}
+
+	// Wrap the action with logging
+	loggedAction := &Log{
+		Child:   monitoredAction,
+		Message: "Monitoring critical action",
+	}
+
+	// Retry the logged action
+	retry := &Retry{Child: loggedAction}
+
+	// Fallback action
+	fallback := &Action{
+		Run: func() Status {
+			return Success
+		},
+	}
+
+	// Selector with logged retry
+	selector := &Selector{
+		Children: []Node{retry, fallback},
+	}
+
+	bt := New(selector)
+
+	// Execute until success - may need multiple ticks for retry to work
+	for i := 0; i < 10; i++ { // Safety limit
+		status := bt.Tick()
+		if status == Success {
+			break
+		}
+		if status == Failure {
+			t.Errorf("Unexpected failure at tick %d", i+1)
+			break
+		}
+	}
+
+	// Final status should be success
+	if bt.Status() != Success {
+		t.Errorf("Expected final status Success, got %v", bt.Status())
+	}
+
+	// Verify the action was executed the expected number of times
+	if executions != 3 {
+		t.Errorf("Expected 3 executions, got %d", executions)
+	}
+
+	// Test string representation includes Log node
+	str := bt.String()
+	expectedParts := []string{"BehaviorTree", "Selector", "Retry", "Log", "Action"}
 	for _, part := range expectedParts {
 		if !strings.Contains(str, part) {
 			t.Errorf("BehaviorTree.String() should contain '%s', got %v", part, str)

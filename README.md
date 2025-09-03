@@ -53,6 +53,7 @@ type Node interface {
 - **Invert**: Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
 - **AlwaysSuccess**: Always returns Success regardless of its child's result. Useful for ensuring a branch always succeeds.
 - **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
+- **Log**: Executes its child and logs the result using structured logging (slog). Returns the child's status unchanged. Useful for debugging and monitoring.
 
 ### BehaviorTree
 
@@ -149,6 +150,12 @@ alwaysSuccess := &behave.AlwaysSuccess{
 // Always fail (useful for testing or negative conditions)
 alwaysFailure := &behave.AlwaysFailure{
     Child: &behave.Action{Run: shouldFailFunc},
+}
+
+// Log node for debugging and monitoring
+loggedAction := &behave.Log{
+    Child:   &behave.Action{Run: importantFunc},
+    Message: "Executing critical operation",
 }
 
 tree := behave.New(par)
@@ -602,6 +609,127 @@ func main() {
     }
     
     fmt.Printf("Complex operation completed after %d connection attempts!\n", connectionAttempts)
+}
+```
+
+## Log Node Example
+
+The Log node provides structured logging for debugging and monitoring behavior tree execution:
+
+```go
+package main
+
+import (
+    "fmt"
+    "log/slog"
+    "math/rand"
+    "os"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    // Configure structured logging with JSON format
+    logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+        Level: slog.LevelDebug,
+    }))
+    slog.SetDefault(logger)
+
+    fmt.Println("=== Log Node Example ===")
+    
+    attempts := 0
+    
+    // Critical operation that might fail
+    criticalOperation := &behave.Action{
+        Run: func() behave.Status {
+            attempts++
+            fmt.Printf("Attempt %d: ", attempts)
+            
+            if rand.Float32() < 0.7 { // 70% chance of failure
+                fmt.Println("Operation failed")
+                return behave.Failure
+            }
+            
+            fmt.Println("Operation succeeded")
+            return behave.Success
+        },
+    }
+    
+    // Wrap with logging for monitoring
+    loggedOperation := &behave.Log{
+        Child:   criticalOperation,
+        Message: "Critical system operation",
+    }
+    
+    // Retry with logging
+    retryWithLogging := &behave.Retry{Child: loggedOperation}
+    
+    tree := behave.New(retryWithLogging)
+    
+    // Execute until success
+    for tree.Status() != behave.Success {
+        tree.Tick()
+        if attempts > 10 { // Safety break
+            break
+        }
+    }
+    
+    fmt.Printf("Operation completed after %d attempts\n", attempts)
+    
+    // Example 2: Complex behavior tree with multiple logged components
+    fmt.Println("\n=== Complex Tree with Logging ===")
+    
+    // Database connection with logging
+    dbConnections := 0
+    dbConnect := &behave.Log{
+        Child: &behave.Action{
+            Run: func() behave.Status {
+                dbConnections++
+                if dbConnections < 2 {
+                    return behave.Failure
+                }
+                return behave.Success
+            },
+        },
+        Message: "Database connection attempt",
+    }
+    
+    // API call with logging
+    apiCalls := 0
+    apiCall := &behave.Log{
+        Child: &behave.Action{
+            Run: func() behave.Status {
+                apiCalls++
+                return behave.Success
+            },
+        },
+        Message: "External API call",
+    }
+    
+    // Data processing with logging
+    dataProcess := &behave.Log{
+        Child: &behave.Action{
+            Run: func() behave.Status {
+                return behave.Success
+            },
+        },
+        Message: "Data processing step",
+    }
+    
+    // Sequence with logged steps
+    pipeline := &behave.Sequence{
+        Children: []behave.Node{
+            &behave.Retry{Child: dbConnect},  // Retry DB connection
+            apiCall,                          // Make API call
+            dataProcess,                      // Process data
+        },
+    }
+    
+    pipelineTree := behave.New(pipeline)
+    
+    // Execute pipeline
+    status := pipelineTree.Tick()
+    fmt.Printf("Pipeline completed with status: %s\n", status.String())
+    fmt.Printf("DB connections: %d, API calls: %d\n", dbConnections, apiCalls)
 }
 ```
 
