@@ -49,6 +49,7 @@ type Node interface {
 - **Repeat**: Repeats its child until it fails. Returns Running while child succeeds (and resets it), Failure when child fails.
 - **RepeatN**: Executes its child a specific number of times before returning the child's last result. Returns Running until MaxCount is reached.
 - **WhileSuccess**: Returns Running as long as its child is either Running or Success, and returns Failure otherwise. Useful for creating loops.
+- **WhileFailure**: Returns Running as long as its child is either Running or Failure, and returns Success otherwise. Useful for retry loops.
 - **Invert**: Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
 - **AlwaysSuccess**: Always returns Success regardless of its child's result. Useful for ensuring a branch always succeeds.
 - **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
@@ -128,6 +129,11 @@ repeatN := &behave.RepeatN{
 // Keep running while child succeeds or is running
 whileSuccess := &behave.WhileSuccess{
     Child: &behave.Condition{Check: keepGoingFunc},
+}
+
+// Keep running while child fails or is running (retry pattern)
+whileFailure := &behave.WhileFailure{
+    Child: &behave.Action{Run: retryableFunc},
 }
 
 // Invert a condition (succeeds when condition fails)
@@ -496,6 +502,106 @@ func main() {
     }
     
     fmt.Printf("Task loop completed after %d attempts!\n", taskAttempts)
+}
+```
+
+## WhileFailure Node Example
+
+The WhileFailure node creates retry loops that continue while a task fails, and succeeds when the task finally succeeds:
+
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    attempts := 0
+    maxAttempts := 5
+
+    // Unreliable network operation that might fail
+    networkOperation := &behave.Action{
+        Run: func() behave.Status {
+            attempts++
+            fmt.Printf("Network attempt %d: ", attempts)
+            
+            // Simulate increasing success probability over time
+            successChance := float32(attempts) / float32(maxAttempts)
+            if rand.Float32() < successChance {
+                fmt.Println("Success!")
+                return behave.Success
+            }
+            
+            fmt.Println("Failed - retrying...")
+            return behave.Failure
+        },
+    }
+    
+    // WhileFailure will keep trying until the operation succeeds
+    retryLoop := &behave.WhileFailure{Child: networkOperation}
+    
+    tree := behave.New(retryLoop)
+    
+    fmt.Println("=== WhileFailure Retry Loop Example ===")
+    
+    // Keep ticking until success
+    for tree.Status() != behave.Success {
+        status := tree.Tick()
+        fmt.Printf("Tree status: %s\n", status.String())
+        if attempts >= maxAttempts {
+            break // Safety break
+        }
+    }
+    
+    fmt.Printf("Operation completed after %d attempts!\n", attempts)
+    
+    // Example 2: WhileFailure in a larger behavior tree
+    fmt.Println("\n=== WhileFailure in Complex Tree ===")
+    
+    connectionAttempts := 0
+    connectAction := &behave.Action{
+        Run: func() behave.Status {
+            connectionAttempts++
+            fmt.Printf("Connection attempt %d: ", connectionAttempts)
+            
+            if connectionAttempts >= 3 {
+                fmt.Println("Connected!")
+                return behave.Success
+            }
+            
+            fmt.Println("Connection failed")
+            return behave.Failure
+        },
+    }
+    
+    // Task to execute after successful connection
+    mainTask := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Executing main task...")
+            return behave.Success
+        },
+    }
+    
+    // WhileFailure for connection retry
+    connectionRetry := &behave.WhileFailure{Child: connectAction}
+    
+    // Sequence: connect then execute task
+    sequence := &behave.Sequence{
+        Children: []behave.Node{connectionRetry, mainTask},
+    }
+    
+    complexTree := behave.New(sequence)
+    
+    // Execute the complex tree
+    for complexTree.Status() != behave.Success {
+        status := complexTree.Tick()
+        fmt.Printf("Complex tree status: %s\n", status.String())
+    }
+    
+    fmt.Printf("Complex operation completed after %d connection attempts!\n", connectionAttempts)
 }
 ```
 

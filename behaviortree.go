@@ -144,6 +144,8 @@ func (bt *BehaviorTree) String() string {
 			}
 		case *WhileSuccess:
 			builder.WriteString("WhileSuccess (" + n.Status().String() + ")")
+		case *WhileFailure:
+			builder.WriteString("WhileFailure (" + n.Status().String() + ")")
 			if n.Child != nil {
 				printNode(n.Child, depth+1)
 			}
@@ -945,6 +947,70 @@ func (ws *WhileSuccess) String() string {
 	if ws.Child != nil {
 		builder.WriteString("\n  ")
 		builder.WriteString(ws.Child.String())
+	}
+	return builder.String()
+}
+
+// WhileFailure represents a decorator node that returns Running as long as its child
+// returns Running or Failure, and returns Success when the child succeeds.
+// It continues executing its child while it fails or is running.
+type WhileFailure struct {
+	Child  Node
+	status Status
+}
+
+// Tick executes the WhileFailure node, running its child and continuing while it fails or runs.
+func (wf *WhileFailure) Tick() Status {
+	if wf.Child == nil {
+		wf.status = Success // No child means we're done (child "succeeded")
+		return wf.status
+	}
+
+	childStatus := wf.Child.Tick()
+
+	switch childStatus {
+	case Running, Failure:
+		// Continue running while child is running or failing
+		wf.status = Running
+		// Reset child if it failed so it can try again
+		if childStatus == Failure {
+			wf.Child.Reset()
+		}
+		return wf.status
+	case Success:
+		// Child succeeded, so we're done
+		wf.status = Success
+		return wf.status
+	default:
+		// Ready state - should not happen in normal execution
+		wf.status = Running
+		return wf.status
+	}
+}
+
+// Reset resets the WhileFailure node and its child to the Ready state.
+func (wf *WhileFailure) Reset() Status {
+	wf.status = Ready
+	if wf.Child != nil {
+		wf.Child.Reset()
+	}
+	return wf.status
+}
+
+// Status returns the current status of the WhileFailure node.
+func (wf *WhileFailure) Status() Status {
+	return wf.status
+}
+
+// String returns a string representation of the WhileFailure node.
+func (wf *WhileFailure) String() string {
+	var builder strings.Builder
+	builder.WriteString("WhileFailure (")
+	builder.WriteString(wf.status.String())
+	builder.WriteString(")")
+	if wf.Child != nil {
+		builder.WriteString("\n  ")
+		builder.WriteString(wf.Child.String())
 	}
 	return builder.String()
 }
