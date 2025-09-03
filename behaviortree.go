@@ -80,84 +80,13 @@ func (bt *BehaviorTree) Status() Status {
 func (bt *BehaviorTree) String() string {
 	var builder strings.Builder
 	builder.WriteString("BehaviorTree (" + bt.Status().String() + ")")
-	var printNode func(Node, int)
-	printNode = func(n Node, depth int) {
-		builder.WriteString("\n")
-		for i := 0; i < depth; i++ {
-			builder.WriteString("  ")
-		}
-		switch n := n.(type) {
-		case *Action:
-			builder.WriteString("Action (" + n.Status().String() + ")")
-		case *Condition:
-			builder.WriteString("Condition (" + n.Status().String() + ")")
-		case *Composite:
-			builder.WriteString("Composite (" + n.Status().String() + ")")
-			for i := range n.Conditions {
-				printNode(n.Conditions[i], depth+1)
-			}
-			if n.Child != nil {
-				printNode(n.Child, depth+1)
-			}
-		case *Sequence:
-			builder.WriteString("Sequence (" + n.Status().String() + ")")
-			for _, child := range n.Children {
-				printNode(child, depth+1)
-			}
-		case *Selector:
-			builder.WriteString("Selector (" + n.Status().String() + ")")
-			for _, child := range n.Children {
-				printNode(child, depth+1)
-			}
-		case *Parallel:
-			builder.WriteString("Parallel (" + n.Status().String() + ", MinSuccess: " + strconv.Itoa(n.MinSuccessCount) + ")")
-			for _, child := range n.Children {
-				printNode(child, depth+1)
-			}
-		case *Retry:
-			builder.WriteString("Retry (" + n.Status().String() + ")")
-			if n.Child != nil {
-				printNode(n.Child, depth+1)
-			}
-		case *Repeat:
-			builder.WriteString("Repeat (" + n.Status().String() + ")")
-			if n.Child != nil {
-				printNode(n.Child, depth+1)
-			}
-		case *Invert:
-			builder.WriteString("Invert (" + n.Status().String() + ")")
-			if n.Child != nil {
-				printNode(n.Child, depth+1)
-			}
-		case *AlwaysSuccess:
-			builder.WriteString("AlwaysSuccess (" + n.Status().String() + ")")
-			if n.Child != nil {
-				printNode(n.Child, depth+1)
-			}
-		case *AlwaysFailure:
-			builder.WriteString("AlwaysFailure (" + n.Status().String() + ")")
-			if n.Child != nil {
-				printNode(n.Child, depth+1)
-			}
-		case *RepeatN:
-			builder.WriteString("RepeatN (" + n.Status().String() + ", Count: " + strconv.Itoa(n.Count) + "/" + strconv.Itoa(n.MaxCount) + ")")
-			if n.Child != nil {
-				printNode(n.Child, depth+1)
-			}
-		case *WhileSuccess:
-			builder.WriteString("WhileSuccess (" + n.Status().String() + ")")
-		case *WhileFailure:
-			builder.WriteString("WhileFailure (" + n.Status().String() + ")")
-		case *Log:
-			builder.WriteString("Log (" + n.Status().String() + ")")
-			if n.Child != nil {
-				printNode(n.Child, depth+1)
-			}
-		default:
-			builder.WriteString("Unknown\n")
-		}
+	// builder.WriteString("\n. ")
+	str := bt.Root.String()
+	lines := strings.Split(str, "\n")
+	for _, line := range lines {
+		builder.WriteString("\n  ")
+		builder.WriteString(line)
 	}
-	printNode(bt.Root, 0)
 	return builder.String()
 }
 
@@ -320,10 +249,16 @@ func (c *Composite) String() string {
 	var builder strings.Builder
 	builder.WriteString("Composite (" + c.Status().String() + ")")
 	for i := range c.Conditions {
-		builder.WriteString("\n  Node[" + strconv.Itoa(i) + "]: " + c.Conditions[i].String())
+		builder.WriteString("\n  Condition[" + strconv.Itoa(i) + "]: " + c.Conditions[i].String())
 	}
 	if c.Child != nil {
-		builder.WriteString("\n  Child: " + c.Child.String())
+		childStr := c.Child.String()
+		lines := strings.Split(childStr, "\n")
+		builder.WriteString("\n  Child: " + lines[0])
+		lines = lines[1:]
+		for _, line := range lines {
+			builder.WriteString("\n  " + line)
+		}
 	}
 	return builder.String()
 }
@@ -373,8 +308,12 @@ func (s *Selector) String() string {
 	var builder strings.Builder
 	builder.WriteString("Selector (" + s.Status().String() + ")")
 	for _, child := range s.Children {
-		builder.WriteString("\n  ")
-		builder.WriteString(child.String())
+		str := child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -424,8 +363,12 @@ func (s *Sequence) String() string {
 	var builder strings.Builder
 	builder.WriteString("Sequence (" + s.Status().String() + ")")
 	for _, child := range s.Children {
-		builder.WriteString("\n  ")
-		builder.WriteString(child.String())
+		str := child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -520,8 +463,12 @@ func (p *Parallel) String() string {
 	builder.WriteString(strconv.Itoa(p.MinSuccessCount))
 	builder.WriteString(")")
 	for _, child := range p.Children {
-		builder.WriteString("\n  ")
-		builder.WriteString(child.String())
+		str := child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -583,7 +530,12 @@ func (r *Retry) String() string {
 	builder.WriteString(")")
 	if r.Child != nil {
 		builder.WriteString("\n  ")
-		builder.WriteString(r.Child.String())
+		str := r.Child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -645,7 +597,12 @@ func (rp *Repeat) String() string {
 	builder.WriteString(")")
 	if rp.Child != nil {
 		builder.WriteString("\n  ")
-		builder.WriteString(rp.Child.String())
+		str := rp.Child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -706,7 +663,12 @@ func (i *Invert) String() string {
 	builder.WriteString(")")
 	if i.Child != nil {
 		builder.WriteString("\n  ")
-		builder.WriteString(i.Child.String())
+		str := i.Child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -755,7 +717,12 @@ func (as *AlwaysSuccess) String() string {
 	builder.WriteString(")")
 	if as.Child != nil {
 		builder.WriteString("\n  ")
-		builder.WriteString(as.Child.String())
+		str := as.Child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -804,7 +771,12 @@ func (af *AlwaysFailure) String() string {
 	builder.WriteString(")")
 	if af.Child != nil {
 		builder.WriteString("\n  ")
-		builder.WriteString(af.Child.String())
+		str := af.Child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -890,7 +862,12 @@ func (rn *RepeatN) String() string {
 	builder.WriteString(")")
 	if rn.Child != nil {
 		builder.WriteString("\n  ")
-		builder.WriteString(rn.Child.String())
+		str := rn.Child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -950,7 +927,12 @@ func (ws *WhileSuccess) String() string {
 	builder.WriteString(")")
 	if ws.Child != nil {
 		builder.WriteString("\n  ")
-		builder.WriteString(ws.Child.String())
+		str := ws.Child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
@@ -1014,7 +996,12 @@ func (wf *WhileFailure) String() string {
 	builder.WriteString(")")
 	if wf.Child != nil {
 		builder.WriteString("\n  ")
-		builder.WriteString(wf.Child.String())
+		str := wf.Child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }

@@ -316,7 +316,7 @@ func TestComposite_Tick(t *testing.T) {
 		{
 			name:       "no conditions, child succeeds",
 			conditions: nil,
-			child:      &Action{Run: func() Status { return Success }},
+			child:      &Composite{Child: &Sequence{Children: []Node{&Action{Run: func() Status { return Success }}}}},
 			expected:   Success,
 		},
 		{
