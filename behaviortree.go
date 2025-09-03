@@ -1146,7 +1146,12 @@ func (l *Log) String() string {
 	builder.WriteString(")")
 	if l.Child != nil {
 		builder.WriteString("\n  ")
-		builder.WriteString(l.Child.String())
+		str := l.Child.String()
+		lines := strings.Split(str, "\n")
+		for _, line := range lines {
+			builder.WriteString("\n  ")
+			builder.WriteString(line)
+		}
 	}
 	return builder.String()
 }
