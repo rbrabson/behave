@@ -1059,7 +1059,8 @@ func (l *Log) Tick() Status {
 	// Log with the determined level
 	slog.Log(context.Background(), logLevel, message,
 		"child_status", childStatus.String(),
-		"child_type", l.getChildType())
+		"child_type", l.getChildType(),
+	)
 
 	return l.status
 }
