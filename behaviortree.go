@@ -127,6 +127,16 @@ func (bt *BehaviorTree) String() string {
 			if n.Child != nil {
 				printNode(n.Child, depth+1)
 			}
+		case *AlwaysSuccess:
+			builder.WriteString("AlwaysSuccess (" + n.Status().String() + ")")
+			if n.Child != nil {
+				printNode(n.Child, depth+1)
+			}
+		case *AlwaysFailure:
+			builder.WriteString("AlwaysFailure (" + n.Status().String() + ")")
+			if n.Child != nil {
+				printNode(n.Child, depth+1)
+			}
 		default:
 			builder.WriteString("Unknown\n")
 		}
@@ -681,6 +691,104 @@ func (i *Invert) String() string {
 	if i.Child != nil {
 		builder.WriteString("\n  ")
 		builder.WriteString(i.Child.String())
+	}
+	return builder.String()
+}
+
+// AlwaysSuccess represents a decorator node that always returns Success regardless of its child's result.
+// This is useful for ensuring certain branches always appear successful to their parent nodes.
+type AlwaysSuccess struct {
+	Child  Node
+	status Status
+}
+
+// Tick executes the AlwaysSuccess node, running its child but always returning Success.
+func (as *AlwaysSuccess) Tick() Status {
+	if as.Child == nil {
+		as.status = Success
+		return as.status
+	}
+
+	// Execute the child but ignore its result
+	as.Child.Tick()
+
+	// Always return Success regardless of child's result
+	as.status = Success
+	return as.status
+}
+
+// Reset resets the AlwaysSuccess node and its child to the Ready state.
+func (as *AlwaysSuccess) Reset() Status {
+	as.status = Ready
+	if as.Child != nil {
+		as.Child.Reset()
+	}
+	return as.status
+}
+
+// Status returns the current status of the AlwaysSuccess node.
+func (as *AlwaysSuccess) Status() Status {
+	return as.status
+}
+
+// String returns a string representation of the AlwaysSuccess node.
+func (as *AlwaysSuccess) String() string {
+	var builder strings.Builder
+	builder.WriteString("AlwaysSuccess (")
+	builder.WriteString(as.Status().String())
+	builder.WriteString(")")
+	if as.Child != nil {
+		builder.WriteString("\n  ")
+		builder.WriteString(as.Child.String())
+	}
+	return builder.String()
+}
+
+// AlwaysFailure represents a decorator node that always returns Failure regardless of its child's result.
+// This is useful for testing or ensuring certain branches always appear failed to their parent nodes.
+type AlwaysFailure struct {
+	Child  Node
+	status Status
+}
+
+// Tick executes the AlwaysFailure node, running its child but always returning Failure.
+func (af *AlwaysFailure) Tick() Status {
+	if af.Child == nil {
+		af.status = Failure
+		return af.status
+	}
+
+	// Execute the child but ignore its result
+	af.Child.Tick()
+
+	// Always return Failure regardless of child's result
+	af.status = Failure
+	return af.status
+}
+
+// Reset resets the AlwaysFailure node and its child to the Ready state.
+func (af *AlwaysFailure) Reset() Status {
+	af.status = Ready
+	if af.Child != nil {
+		af.Child.Reset()
+	}
+	return af.status
+}
+
+// Status returns the current status of the AlwaysFailure node.
+func (af *AlwaysFailure) Status() Status {
+	return af.status
+}
+
+// String returns a string representation of the AlwaysFailure node.
+func (af *AlwaysFailure) String() string {
+	var builder strings.Builder
+	builder.WriteString("AlwaysFailure (")
+	builder.WriteString(af.Status().String())
+	builder.WriteString(")")
+	if af.Child != nil {
+		builder.WriteString("\n  ")
+		builder.WriteString(af.Child.String())
 	}
 	return builder.String()
 }

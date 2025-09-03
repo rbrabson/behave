@@ -1348,3 +1348,353 @@ func TestComplexBehaviorTreeWithInvert(t *testing.T) {
 		t.Errorf("BehaviorTree.String() should contain 'Condition', got %v", str)
 	}
 }
+
+func TestAlwaysSuccess_Tick(t *testing.T) {
+	tests := []struct {
+		name           string
+		child          Node
+		expectedStatus Status
+	}{
+		{
+			name:           "no child",
+			child:          nil,
+			expectedStatus: Success,
+		},
+		{
+			name:           "child succeeds, return success",
+			child:          &Action{Run: func() Status { return Success }},
+			expectedStatus: Success,
+		},
+		{
+			name:           "child fails, still return success",
+			child:          &Action{Run: func() Status { return Failure }},
+			expectedStatus: Success,
+		},
+		{
+			name:           "child running, still return success",
+			child:          &Action{Run: func() Status { return Running }},
+			expectedStatus: Success,
+		},
+		{
+			name:           "child ready, still return success",
+			child:          &Action{Run: func() Status { return Ready }},
+			expectedStatus: Success,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			alwaysSuccess := &AlwaysSuccess{Child: test.child}
+			status := alwaysSuccess.Tick()
+			if status != test.expectedStatus {
+				t.Errorf("AlwaysSuccess.Tick() = %v, want %v", status, test.expectedStatus)
+			}
+			if alwaysSuccess.Status() != test.expectedStatus {
+				t.Errorf("AlwaysSuccess.Status() = %v, want %v", alwaysSuccess.Status(), test.expectedStatus)
+			}
+		})
+	}
+}
+
+func TestAlwaysSuccess_ChildExecution(t *testing.T) {
+	// Test that child is actually executed but result is ignored
+	executed := false
+	childAction := &Action{
+		Run: func() Status {
+			executed = true
+			return Failure // This should be ignored
+		},
+	}
+
+	alwaysSuccess := &AlwaysSuccess{Child: childAction}
+	status := alwaysSuccess.Tick()
+
+	if !executed {
+		t.Error("Expected child to be executed")
+	}
+	if status != Success {
+		t.Errorf("Expected Success despite child failure, got %v", status)
+	}
+}
+
+func TestAlwaysSuccess_Reset(t *testing.T) {
+	child := &Action{Run: func() Status { return Failure }}
+	alwaysSuccess := &AlwaysSuccess{Child: child}
+
+	// Set some status first
+	alwaysSuccess.Tick()
+
+	// Reset should set status to Ready and reset child
+	status := alwaysSuccess.Reset()
+	if status != Ready {
+		t.Errorf("AlwaysSuccess.Reset() = %v, want %v", status, Ready)
+	}
+	if alwaysSuccess.Status() != Ready {
+		t.Errorf("AlwaysSuccess.Status() after reset = %v, want %v", alwaysSuccess.Status(), Ready)
+	}
+	if child.Status() != Ready {
+		t.Errorf("Child status after AlwaysSuccess.Reset() = %v, want %v", child.Status(), Ready)
+	}
+}
+
+func TestAlwaysSuccess_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		child    Node
+		expected string
+	}{
+		{
+			name:     "no child",
+			child:    nil,
+			expected: "AlwaysSuccess (Ready)",
+		},
+		{
+			name:     "with child",
+			child:    &Action{Run: func() Status { return Failure }},
+			expected: "AlwaysSuccess (Ready)\n  Action (Ready)",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			alwaysSuccess := &AlwaysSuccess{Child: test.child}
+			result := alwaysSuccess.String()
+			if result != test.expected {
+				t.Errorf("AlwaysSuccess.String() = %v, want %v", result, test.expected)
+			}
+		})
+	}
+}
+
+func TestComplexBehaviorTreeWithAlwaysSuccess(t *testing.T) {
+	// Create a complex tree: Sequence with AlwaysSuccess wrapping a failing action
+	var actionResult Status
+
+	// This action will fail, but AlwaysSuccess will make it appear successful
+	failingAction := &Action{Run: func() Status { return actionResult }}
+	alwaysSuccessAction := &AlwaysSuccess{Child: failingAction}
+
+	// Another action that should execute after the "successful" first action
+	secondAction := &Action{Run: func() Status { return Success }}
+
+	sequence := &Sequence{Children: []Node{alwaysSuccessAction, secondAction}}
+	bt := New(sequence)
+
+	// Test 1: First action fails but AlwaysSuccess makes it succeed, sequence succeeds
+	actionResult = Failure
+	status := bt.Tick()
+	if status != Success {
+		t.Errorf("Expected Success when AlwaysSuccess wraps failing action, got %v", status)
+	}
+
+	// Reset for next test
+	bt.Reset()
+
+	// Test 2: First action succeeds, sequence succeeds
+	actionResult = Success
+	status = bt.Tick()
+	if status != Success {
+		t.Errorf("Expected Success when wrapped action succeeds, got %v", status)
+	}
+
+	// Verify string representation includes all nodes
+	str := bt.String()
+	if !strings.Contains(str, "AlwaysSuccess") {
+		t.Errorf("BehaviorTree.String() should contain 'AlwaysSuccess', got %v", str)
+	}
+	if !strings.Contains(str, "Sequence") {
+		t.Errorf("BehaviorTree.String() should contain 'Sequence', got %v", str)
+	}
+	if !strings.Contains(str, "Action") {
+		t.Errorf("BehaviorTree.String() should contain 'Action', got %v", str)
+	}
+}
+
+func TestAlwaysFailure_Tick(t *testing.T) {
+	tests := []struct {
+		name           string
+		child          Node
+		expectedStatus Status
+	}{
+		{
+			name:           "no child",
+			child:          nil,
+			expectedStatus: Failure,
+		},
+		{
+			name:           "child succeeds, still return failure",
+			child:          &Action{Run: func() Status { return Success }},
+			expectedStatus: Failure,
+		},
+		{
+			name:           "child fails, return failure",
+			child:          &Action{Run: func() Status { return Failure }},
+			expectedStatus: Failure,
+		},
+		{
+			name:           "child running, still return failure",
+			child:          &Action{Run: func() Status { return Running }},
+			expectedStatus: Failure,
+		},
+		{
+			name:           "child ready, still return failure",
+			child:          &Action{Run: func() Status { return Ready }},
+			expectedStatus: Failure,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			alwaysFailure := &AlwaysFailure{Child: test.child}
+			status := alwaysFailure.Tick()
+			if status != test.expectedStatus {
+				t.Errorf("AlwaysFailure.Tick() = %v, want %v", status, test.expectedStatus)
+			}
+			if alwaysFailure.Status() != test.expectedStatus {
+				t.Errorf("AlwaysFailure.Status() = %v, want %v", alwaysFailure.Status(), test.expectedStatus)
+			}
+		})
+	}
+}
+
+func TestAlwaysFailure_ChildExecution(t *testing.T) {
+	// Test that child is actually executed but result is ignored
+	executed := false
+	childAction := &Action{
+		Run: func() Status {
+			executed = true
+			return Success // This should be ignored
+		},
+	}
+
+	alwaysFailure := &AlwaysFailure{Child: childAction}
+	status := alwaysFailure.Tick()
+
+	if !executed {
+		t.Error("Expected child to be executed")
+	}
+	if status != Failure {
+		t.Errorf("Expected Failure despite child success, got %v", status)
+	}
+}
+
+func TestAlwaysFailure_Reset(t *testing.T) {
+	child := &Action{Run: func() Status { return Success }}
+	alwaysFailure := &AlwaysFailure{Child: child}
+
+	// Set some status first
+	alwaysFailure.Tick()
+
+	// Reset should set status to Ready and reset child
+	status := alwaysFailure.Reset()
+	if status != Ready {
+		t.Errorf("AlwaysFailure.Reset() = %v, want %v", status, Ready)
+	}
+	if alwaysFailure.Status() != Ready {
+		t.Errorf("AlwaysFailure.Status() after reset = %v, want %v", alwaysFailure.Status(), Ready)
+	}
+	if child.Status() != Ready {
+		t.Errorf("Child status after AlwaysFailure.Reset() = %v, want %v", child.Status(), Ready)
+	}
+}
+
+func TestAlwaysFailure_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		child    Node
+		expected string
+	}{
+		{
+			name:     "no child",
+			child:    nil,
+			expected: "AlwaysFailure (Ready)",
+		},
+		{
+			name:     "with child",
+			child:    &Action{Run: func() Status { return Success }},
+			expected: "AlwaysFailure (Ready)\n  Action (Ready)",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			alwaysFailure := &AlwaysFailure{Child: test.child}
+			result := alwaysFailure.String()
+			if result != test.expected {
+				t.Errorf("AlwaysFailure.String() = %v, want %v", result, test.expected)
+			}
+		})
+	}
+}
+
+func TestComplexBehaviorTreeWithAlwaysFailure(t *testing.T) {
+	// Create a complex tree: Selector with AlwaysFailure wrapping a successful action
+	var actionResult Status
+
+	// This action will succeed, but AlwaysFailure will make it appear failed
+	succeedingAction := &Action{Run: func() Status { return actionResult }}
+	alwaysFailureAction := &AlwaysFailure{Child: succeedingAction}
+
+	// Fallback action that should execute after the "failed" first action
+	fallbackAction := &Action{Run: func() Status { return Success }}
+
+	selector := &Selector{Children: []Node{alwaysFailureAction, fallbackAction}}
+	bt := New(selector)
+
+	// Test 1: First action succeeds but AlwaysFailure makes it fail, selector tries fallback and succeeds
+	actionResult = Success
+	status := bt.Tick()
+	if status != Success {
+		t.Errorf("Expected Success when AlwaysFailure wraps successful action and fallback succeeds, got %v", status)
+	}
+
+	// Reset for next test
+	bt.Reset()
+
+	// Test 2: First action fails, AlwaysFailure makes it fail, selector tries fallback and succeeds
+	actionResult = Failure
+	status = bt.Tick()
+	if status != Success {
+		t.Errorf("Expected Success when wrapped action fails and fallback succeeds, got %v", status)
+	}
+
+	// Verify string representation includes all nodes
+	str := bt.String()
+	if !strings.Contains(str, "AlwaysFailure") {
+		t.Errorf("BehaviorTree.String() should contain 'AlwaysFailure', got %v", str)
+	}
+	if !strings.Contains(str, "Selector") {
+		t.Errorf("BehaviorTree.String() should contain 'Selector', got %v", str)
+	}
+	if !strings.Contains(str, "Action") {
+		t.Errorf("BehaviorTree.String() should contain 'Action', got %v", str)
+	}
+}
+
+func TestAlwaysSuccessAndAlwaysFailureTogether(t *testing.T) {
+	// Test using both AlwaysSuccess and AlwaysFailure in the same tree
+	succeedingAction := &Action{Run: func() Status { return Success }}
+	failingAction := &Action{Run: func() Status { return Failure }}
+
+	alwaysSuccess := &AlwaysSuccess{Child: failingAction}    // Should appear successful
+	alwaysFailure := &AlwaysFailure{Child: succeedingAction} // Should appear failed
+
+	// In a sequence: AlwaysSuccess should succeed, AlwaysFailure should fail, sequence should fail
+	sequence := &Sequence{Children: []Node{alwaysSuccess, alwaysFailure}}
+	bt := New(sequence)
+
+	status := bt.Tick()
+	if status != Failure {
+		t.Errorf("Expected Failure when sequence contains AlwaysFailure, got %v", status)
+	}
+
+	// Reset and try with selector: AlwaysSuccess should succeed, selector should succeed
+	bt.Reset()
+	selector := &Selector{Children: []Node{alwaysSuccess, alwaysFailure}}
+	bt = New(selector)
+
+	status = bt.Tick()
+	if status != Success {
+		t.Errorf("Expected Success when selector starts with AlwaysSuccess, got %v", status)
+	}
+}
