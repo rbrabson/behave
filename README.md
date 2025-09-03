@@ -31,15 +31,26 @@ type Node interface {
 
 ### Node Types
 
-- **Action**: Leaf node that performs an action. You provide a `Run` function.
-- **Condition**: Leaf node that checks a condition. You provide a `Check` function.
+#### Leaf Nodes
+
+- **Action**: Performs an action. You provide a `Run` function.
+- **Condition**: Checks a condition. You provide a `Check` function.
+
+#### Composite Nodes
+
 - **Composite**: Combines a condition with any other node. First checks the condition, and if it succeeds, runs the child node.
-- **Sequence**: Composite node. Runs children in order; fails or returns running if any child fails or is running, succeeds if all succeed.
-- **Selector**: Composite node. Runs children in order; succeeds or returns running if any child succeeds or is running, fails if all fail.
-- **Parallel**: Composite node. Runs all children in parallel; succeeds if at least `MinSuccessCount` children succeed.
-- **Retry**: Decorator node. Retries its child until it succeeds, ignoring all failures. Returns Success when child succeeds, Running while retrying.
-- **Repeat**: Decorator node. Repeats its child until it fails. Returns Running while child succeeds (and resets it), Failure when child fails.
-- **Invert**: Decorator node. Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
+- **Sequence**: Runs children in order; fails or returns running if any child fails or is running, succeeds if all succeed.
+- **Selector**: Runs children in order; succeeds or returns running if any child succeeds or is running, fails if all fail.
+- **Parallel**: Runs all children in parallel; succeeds if at least `MinSuccessCount` children succeed.
+
+#### Decorator Nodes
+
+- **Retry**: Retries its child until it succeeds, ignoring all failures. Returns Success when child succeeds, Running while retrying.
+- **Repeat**: Repeats its child until it fails. Returns Running while child succeeds (and resets it), Failure when child fails.
+- **RepeatN**: Executes its child a specific number of times before returning the child's last result. Returns Running until MaxCount is reached.
+- **Invert**: Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
+- **AlwaysSuccess**: Always returns Success regardless of its child's result. Useful for ensuring a branch always succeeds.
+- **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
 
 ### BehaviorTree
 
@@ -107,9 +118,25 @@ retry := &behave.Retry{
     Child: &behave.Action{Run: unreliableFunc},
 }
 
+// Repeat a specific number of times
+repeatN := &behave.RepeatN{
+    MaxCount: 3,
+    Child: &behave.Action{Run: limitedFunc},
+}
+
 // Invert a condition (succeeds when condition fails)
 invertedCondition := &behave.Invert{
     Child: &behave.Condition{Check: avoidThisFunc},
+}
+
+// Always succeed (useful for optional tasks)
+alwaysSuccess := &behave.AlwaysSuccess{
+    Child: &behave.Action{Run: optionalFunc},
+}
+
+// Always fail (useful for testing or negative conditions)
+alwaysFailure := &behave.AlwaysFailure{
+    Child: &behave.Action{Run: shouldFailFunc},
 }
 
 tree := behave.New(par)
@@ -261,6 +288,121 @@ func main() {
     fmt.Println("=== Enemy detected ===")
     status = tree.Tick()
     fmt.Printf("Result: %s\n", status.String())
+}
+```
+
+## RepeatN Node Example
+
+The RepeatN node executes its child a specific number of times, which is useful for controlled repetition:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    executions := 0
+    
+    // Action that counts executions
+    countAction := &behave.Action{
+        Run: func() behave.Status {
+            executions++
+            fmt.Printf("Execution %d\n", executions)
+            return behave.Success
+        },
+    }
+    
+    // Repeat exactly 3 times
+    repeatN := &behave.RepeatN{
+        MaxCount: 3,
+        Child: countAction,
+    }
+    
+    tree := behave.New(repeatN)
+    
+    // Keep ticking until completed
+    for tree.Status() != behave.Success {
+        status := tree.Tick()
+        fmt.Printf("Tree status: %s\n", status.String())
+    }
+    
+    fmt.Printf("Completed after %d executions!\n", executions)
+}
+```
+
+## AlwaysSuccess and AlwaysFailure Node Examples
+
+These decorator nodes are useful for ensuring specific outcomes regardless of their child's result:
+
+```go
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    // Unreliable action that might fail
+    unreliableAction := &behave.Action{
+        Run: func() behave.Status {
+            if rand.Float32() < 0.5 {
+                fmt.Println("Action failed!")
+                return behave.Failure
+            }
+            fmt.Println("Action succeeded!")
+            return behave.Success
+        },
+    }
+    
+    // Wrap with AlwaysSuccess to ensure it never fails the tree
+    optionalTask := &behave.AlwaysSuccess{Child: unreliableAction}
+    
+    // Critical action that must execute
+    criticalAction := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Critical action executed!")
+            return behave.Success
+        },
+    }
+    
+    // Sequence that includes the optional task
+    sequence := &behave.Sequence{
+        Children: []behave.Node{optionalTask, criticalAction},
+    }
+    
+    tree := behave.New(sequence)
+    
+    fmt.Println("=== Running sequence with optional task ===")
+    status := tree.Tick()
+    fmt.Printf("Final result: %s\n\n", status.String())
+    
+    // Example with AlwaysFailure for testing
+    failingCondition := &behave.AlwaysFailure{
+        Child: &behave.Action{Run: func() behave.Status { return behave.Success }},
+    }
+    
+    fallbackAction := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Fallback action executed!")
+            return behave.Success
+        },
+    }
+    
+    // Selector that always goes to fallback
+    selector := &behave.Selector{
+        Children: []behave.Node{failingCondition, fallbackAction},
+    }
+    
+    fallbackTree := behave.New(selector)
+    
+    fmt.Println("=== Running selector with always-failing condition ===")
+    status = fallbackTree.Tick()
+    fmt.Printf("Final result: %s\n", status.String())
 }
 ```
 

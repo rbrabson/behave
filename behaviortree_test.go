@@ -1698,3 +1698,289 @@ func TestAlwaysSuccessAndAlwaysFailureTogether(t *testing.T) {
 		t.Errorf("Expected Success when selector starts with AlwaysSuccess, got %v", status)
 	}
 }
+
+func TestRepeatN_Tick(t *testing.T) {
+	tests := []struct {
+		name           string
+		child          Node
+		maxCount       int
+		expectedStatus Status
+		ticksNeeded    int
+	}{
+		{
+			name:           "no child",
+			child:          nil,
+			maxCount:       3,
+			expectedStatus: Failure,
+			ticksNeeded:    1,
+		},
+		{
+			name:           "max count zero",
+			child:          &Action{Run: func() Status { return Success }},
+			maxCount:       0,
+			expectedStatus: Success, // Should execute once and return child's result
+			ticksNeeded:    1,
+		},
+		{
+			name:           "single execution",
+			child:          &Action{Run: func() Status { return Success }},
+			maxCount:       1,
+			expectedStatus: Success,
+			ticksNeeded:    1,
+		},
+		{
+			name:           "multiple executions with success",
+			child:          &Action{Run: func() Status { return Success }},
+			maxCount:       3,
+			expectedStatus: Success,
+			ticksNeeded:    3,
+		},
+		{
+			name:           "multiple executions with final failure",
+			child:          &Action{Run: func() Status { return Failure }},
+			maxCount:       2,
+			expectedStatus: Failure,
+			ticksNeeded:    2,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repeatN := &RepeatN{Child: test.child, MaxCount: test.maxCount}
+
+			var status Status
+			for i := 0; i < test.ticksNeeded; i++ {
+				status = repeatN.Tick()
+				if i < test.ticksNeeded-1 {
+					// Should be Running until the last tick
+					if status != Running {
+						t.Errorf("Tick %d: expected Running, got %v", i+1, status)
+					}
+				}
+			}
+
+			// Final status should match expected
+			if status != test.expectedStatus {
+				t.Errorf("RepeatN.Tick() final result = %v, want %v", status, test.expectedStatus)
+			}
+			if repeatN.Status() != test.expectedStatus {
+				t.Errorf("RepeatN.Status() = %v, want %v", repeatN.Status(), test.expectedStatus)
+			}
+
+			// Check that the count is correct
+			if repeatN.Count != test.maxCount {
+				t.Errorf("RepeatN.Count = %d, want %d", repeatN.Count, test.maxCount)
+			}
+		})
+	}
+}
+
+func TestRepeatN_ChildReset(t *testing.T) {
+	executions := 0
+	action := &Action{
+		Run: func() Status {
+			executions++
+			return Success
+		},
+	}
+
+	repeatN := &RepeatN{Child: action, MaxCount: 3}
+
+	// First two ticks should be Running and reset the child
+	status1 := repeatN.Tick()
+	if status1 != Running {
+		t.Errorf("First tick should return Running, got %v", status1)
+	}
+	if executions != 1 {
+		t.Errorf("Expected 1 execution after first tick, got %d", executions)
+	}
+
+	status2 := repeatN.Tick()
+	if status2 != Running {
+		t.Errorf("Second tick should return Running, got %v", status2)
+	}
+	if executions != 2 {
+		t.Errorf("Expected 2 executions after second tick, got %d", executions)
+	}
+
+	// Third tick should complete and return the child's result
+	status3 := repeatN.Tick()
+	if status3 != Success {
+		t.Errorf("Third tick should return Success, got %v", status3)
+	}
+	if executions != 3 {
+		t.Errorf("Expected 3 executions after third tick, got %d", executions)
+	}
+
+	// Additional ticks should return the same result without executing the child again
+	status4 := repeatN.Tick()
+	if status4 != Success {
+		t.Errorf("Fourth tick should return Success, got %v", status4)
+	}
+	if executions != 3 {
+		t.Errorf("Expected 3 executions after fourth tick (no additional execution), got %d", executions)
+	}
+}
+
+func TestRepeatN_Reset(t *testing.T) {
+	child := &Action{Run: func() Status { return Success }}
+	repeatN := &RepeatN{Child: child, MaxCount: 3}
+
+	// Execute a few times
+	repeatN.Tick()
+	repeatN.Tick()
+
+	// Reset should set status to Ready, reset count, and reset child
+	status := repeatN.Reset()
+	if status != Ready {
+		t.Errorf("RepeatN.Reset() = %v, want %v", status, Ready)
+	}
+	if repeatN.Status() != Ready {
+		t.Errorf("RepeatN.Status() after reset = %v, want %v", repeatN.Status(), Ready)
+	}
+	if repeatN.Count != 0 {
+		t.Errorf("RepeatN.Count after reset = %d, want 0", repeatN.Count)
+	}
+	if child.Status() != Ready {
+		t.Errorf("Child status after RepeatN.Reset() = %v, want %v", child.Status(), Ready)
+	}
+}
+
+func TestRepeatN_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		child    Node
+		maxCount int
+		count    int
+		expected string
+	}{
+		{
+			name:     "no child",
+			child:    nil,
+			maxCount: 3,
+			count:    0,
+			expected: "RepeatN (Ready, 0/3)",
+		},
+		{
+			name:     "with child, partial execution",
+			child:    &Action{Run: func() Status { return Success }},
+			maxCount: 5,
+			count:    2,
+			expected: "RepeatN (Ready, 2/5)\n  Action (Ready)",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repeatN := &RepeatN{Child: test.child, MaxCount: test.maxCount, Count: test.count}
+			result := repeatN.String()
+			if result != test.expected {
+				t.Errorf("RepeatN.String() = %v, want %v", result, test.expected)
+			}
+		})
+	}
+}
+
+func TestRepeatN_RunningChild(t *testing.T) {
+	// Test behavior when child returns Running
+	runningCount := 0
+	action := &Action{
+		Run: func() Status {
+			runningCount++
+			if runningCount < 3 {
+				return Running
+			}
+			return Success
+		},
+	}
+
+	repeatN := &RepeatN{Child: action, MaxCount: 2}
+
+	// First execution: child returns Running, RepeatN should return Running
+	status1 := repeatN.Tick()
+	if status1 != Running {
+		t.Errorf("Expected Running when child is running, got %v", status1)
+	}
+	if repeatN.Count != 0 {
+		t.Errorf("Count should not increment while child is running, got %d", repeatN.Count)
+	}
+
+	// Continue ticking until child completes first execution
+	status2 := repeatN.Tick()
+	if status2 != Running {
+		t.Errorf("Expected Running when child is running, got %v", status2)
+	}
+
+	// Child should complete first execution
+	status3 := repeatN.Tick()
+	if status3 != Running {
+		t.Errorf("Expected Running after first execution completion, got %v", status3)
+	}
+	if repeatN.Count != 1 {
+		t.Errorf("Count should be 1 after first execution, got %d", repeatN.Count)
+	}
+
+	// Reset the running count for second execution
+	runningCount = 0
+
+	// Second execution should also work the same way
+	repeatN.Tick()            // Running
+	repeatN.Tick()            // Running
+	status4 := repeatN.Tick() // Success (final)
+	if status4 != Success {
+		t.Errorf("Expected Success after all executions complete, got %v", status4)
+	}
+	if repeatN.Count != 2 {
+		t.Errorf("Count should be 2 after all executions, got %d", repeatN.Count)
+	}
+}
+
+func TestComplexBehaviorTreeWithRepeatN(t *testing.T) {
+	// Create a complex tree: Sequence with RepeatN wrapping an action
+	executions := 0
+	action := &Action{
+		Run: func() Status {
+			executions++
+			return Success
+		},
+	}
+
+	repeatN := &RepeatN{Child: action, MaxCount: 3}
+	otherAction := &Action{Run: func() Status { return Success }}
+
+	sequence := &Sequence{Children: []Node{repeatN, otherAction}}
+	bt := New(sequence)
+
+	// First two ticks: RepeatN should be Running, sequence should be Running
+	status1 := bt.Tick()
+	if status1 != Running {
+		t.Errorf("Expected Running during RepeatN execution, got %v", status1)
+	}
+
+	status2 := bt.Tick()
+	if status2 != Running {
+		t.Errorf("Expected Running during RepeatN execution, got %v", status2)
+	}
+
+	// Third tick: RepeatN completes, sequence should succeed
+	status3 := bt.Tick()
+	if status3 != Success {
+		t.Errorf("Expected Success when RepeatN completes and other action succeeds, got %v", status3)
+	}
+
+	if executions != 3 {
+		t.Errorf("Expected 3 executions of the action, got %d", executions)
+	}
+
+	// Verify string representation includes all nodes
+	str := bt.String()
+	if !strings.Contains(str, "RepeatN") {
+		t.Errorf("BehaviorTree.String() should contain 'RepeatN', got %v", str)
+	}
+	if !strings.Contains(str, "Sequence") {
+		t.Errorf("BehaviorTree.String() should contain 'Sequence', got %v", str)
+	}
+	if !strings.Contains(str, "3/3") {
+		t.Errorf("BehaviorTree.String() should show execution count '3/3', got %v", str)
+	}
+}

@@ -137,6 +137,11 @@ func (bt *BehaviorTree) String() string {
 			if n.Child != nil {
 				printNode(n.Child, depth+1)
 			}
+		case *RepeatN:
+			builder.WriteString("RepeatN (" + n.Status().String() + ", Count: " + strconv.Itoa(n.Count) + "/" + strconv.Itoa(n.MaxCount) + ")")
+			if n.Child != nil {
+				printNode(n.Child, depth+1)
+			}
 		default:
 			builder.WriteString("Unknown\n")
 		}
@@ -789,6 +794,92 @@ func (af *AlwaysFailure) String() string {
 	if af.Child != nil {
 		builder.WriteString("\n  ")
 		builder.WriteString(af.Child.String())
+	}
+	return builder.String()
+}
+
+// RepeatN represents a decorator node that executes its child a specific number of times.
+// It returns Running while the execution count is below MaxCount, then returns the child's last result.
+type RepeatN struct {
+	Child    Node
+	MaxCount int // Maximum number of times to execute the child
+	Count    int // Current execution count
+	status   Status
+}
+
+// Tick executes the RepeatN node, running its child up to MaxCount times.
+func (rn *RepeatN) Tick() Status {
+	if rn.Child == nil {
+		rn.status = Failure
+		rn.Count = rn.MaxCount // Set count to MaxCount when there's no child
+		return rn.status
+	}
+
+	// Handle edge case: MaxCount is 0
+	if rn.MaxCount <= 0 {
+		rn.status = rn.Child.Tick()
+		// Don't increment count for edge case where MaxCount is 0
+		return rn.status
+	}
+
+	// If we haven't reached the maximum count yet
+	if rn.Count < rn.MaxCount {
+		// Execute the child
+		childStatus := rn.Child.Tick()
+
+		// If child is still running, don't increment count yet
+		if childStatus == Running {
+			rn.status = Running
+			return rn.status
+		}
+
+		// Child completed (Success or Failure), increment count
+		rn.Count++
+
+		// If we've reached the maximum count, return the child's result
+		if rn.Count >= rn.MaxCount {
+			rn.status = childStatus
+			return rn.status
+		}
+
+		// We need to run more times, reset the child for the next execution and return Running
+		rn.Child.Reset()
+		rn.status = Running
+		return rn.status
+	}
+
+	// We've already completed all executions, return the stored result
+	return rn.status
+}
+
+// Reset resets the RepeatN node and its child to the Ready state, and resets the execution count.
+func (rn *RepeatN) Reset() Status {
+	rn.status = Ready
+	rn.Count = 0
+	if rn.Child != nil {
+		rn.Child.Reset()
+	}
+	return rn.status
+}
+
+// Status returns the current status of the RepeatN node.
+func (rn *RepeatN) Status() Status {
+	return rn.status
+}
+
+// String returns a string representation of the RepeatN node.
+func (rn *RepeatN) String() string {
+	var builder strings.Builder
+	builder.WriteString("RepeatN (")
+	builder.WriteString(rn.Status().String())
+	builder.WriteString(", ")
+	builder.WriteString(strconv.Itoa(rn.Count))
+	builder.WriteString("/")
+	builder.WriteString(strconv.Itoa(rn.MaxCount))
+	builder.WriteString(")")
+	if rn.Child != nil {
+		builder.WriteString("\n  ")
+		builder.WriteString(rn.Child.String())
 	}
 	return builder.String()
 }
