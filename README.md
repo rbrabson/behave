@@ -39,6 +39,7 @@ type Node interface {
 - **Parallel**: Composite node. Runs all children in parallel; succeeds if at least `MinSuccessCount` children succeed.
 - **Retry**: Decorator node. Retries its child until it succeeds, ignoring all failures. Returns Success when child succeeds, Running while retrying.
 - **Repeat**: Decorator node. Repeats its child until it fails. Returns Running while child succeeds (and resets it), Failure when child fails.
+- **Invert**: Decorator node. Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
 
 ### BehaviorTree
 
@@ -104,6 +105,11 @@ par := &behave.Parallel{
 // Retry until success (keeps trying after failures)
 retry := &behave.Retry{
     Child: &behave.Action{Run: unreliableFunc},
+}
+
+// Invert a condition (succeeds when condition fails)
+invertedCondition := &behave.Invert{
+    Child: &behave.Condition{Check: avoidThisFunc},
 }
 
 tree := behave.New(par)
@@ -197,6 +203,64 @@ func main() {
     }
     
     fmt.Printf("Stopped after %d rounds!\n", rounds)
+}
+```
+
+## Invert Node Example
+
+The Invert node is useful for negating conditions or creating "avoid" behaviors:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    isEnemyNear := false
+    
+    // Condition that checks if enemy is near
+    enemyCheck := &behave.Condition{
+        Check: func() behave.Status {
+            fmt.Printf("Enemy near: %t\n", isEnemyNear)
+            if isEnemyNear {
+                return behave.Success
+            }
+            return behave.Failure
+        },
+    }
+    
+    // Invert the condition - succeeds when NO enemy is near
+    notEnemyNear := &behave.Invert{Child: enemyCheck}
+    
+    // Action to perform when safe
+    safeAction := &behave.Action{
+        Run: func() behave.Status {
+            fmt.Println("Performing safe action!")
+            return behave.Success
+        },
+    }
+    
+    // Sequence: only do safe action when no enemy is near
+    sequence := &behave.Sequence{
+        Children: []behave.Node{notEnemyNear, safeAction},
+    }
+    
+    tree := behave.New(sequence)
+    
+    // Test with no enemy
+    fmt.Println("=== No enemy present ===")
+    status := tree.Tick()
+    fmt.Printf("Result: %s\n\n", status.String())
+    
+    // Test with enemy present
+    isEnemyNear = true
+    tree.Reset()
+    fmt.Println("=== Enemy detected ===")
+    status = tree.Tick()
+    fmt.Printf("Result: %s\n", status.String())
 }
 ```
 

@@ -122,6 +122,11 @@ func (bt *BehaviorTree) String() string {
 			if n.Child != nil {
 				printNode(n.Child, depth+1)
 			}
+		case *Invert:
+			builder.WriteString("Invert (" + n.Status().String() + ")")
+			if n.Child != nil {
+				printNode(n.Child, depth+1)
+			}
 		default:
 			builder.WriteString("Unknown\n")
 		}
@@ -298,6 +303,7 @@ func (c *Composite) String() string {
 }
 
 // Selector is a Node that runs its children in order and succeeds if at least one child succeeds.
+// The Selector composite type can be seen as an OR operator with their children.
 type Selector struct {
 	Children []Node
 	status   Status
@@ -348,6 +354,7 @@ func (s *Selector) String() string {
 }
 
 // Sequence is a Node that runs its children in order and succeeds if all children succeed.
+// The Sequence composite type can be seen as an AND operator with their children.
 type Sequence struct {
 	Children []Node
 	status   Status
@@ -613,6 +620,67 @@ func (rp *Repeat) String() string {
 	if rp.Child != nil {
 		builder.WriteString("\n  ")
 		builder.WriteString(rp.Child.String())
+	}
+	return builder.String()
+}
+
+// Invert represents a decorator node that inverts the result of its child.
+// It changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
+type Invert struct {
+	Child  Node
+	status Status
+}
+
+// Tick executes the Invert node, running its child and inverting Success/Failure results.
+func (i *Invert) Tick() Status {
+	if i.Child == nil {
+		i.status = Failure
+		return i.status
+	}
+
+	childStatus := i.Child.Tick()
+	switch childStatus {
+	case Success:
+		i.status = Failure
+		return i.status
+	case Failure:
+		i.status = Success
+		return i.status
+	case Running:
+		i.status = Running
+		return i.status
+	case Ready:
+		i.status = Ready
+		return i.status
+	default:
+		i.status = Failure
+		return i.status
+	}
+}
+
+// Reset resets the Invert node and its child to the Ready state.
+func (i *Invert) Reset() Status {
+	i.status = Ready
+	if i.Child != nil {
+		i.Child.Reset()
+	}
+	return i.status
+}
+
+// Status returns the current status of the Invert node.
+func (i *Invert) Status() Status {
+	return i.status
+}
+
+// String returns a string representation of the Invert node.
+func (i *Invert) String() string {
+	var builder strings.Builder
+	builder.WriteString("Invert (")
+	builder.WriteString(i.Status().String())
+	builder.WriteString(")")
+	if i.Child != nil {
+		builder.WriteString("\n  ")
+		builder.WriteString(i.Child.String())
 	}
 	return builder.String()
 }

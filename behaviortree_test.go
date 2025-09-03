@@ -1180,3 +1180,171 @@ func TestComplexBehaviorTreeWithRepeat(t *testing.T) {
 		t.Errorf("BehaviorTree.String() should contain 'Sequence', got %v", str)
 	}
 }
+
+func TestInvert_Tick(t *testing.T) {
+	tests := []struct {
+		name           string
+		child          Node
+		expectedStatus Status
+	}{
+		{
+			name:           "no child",
+			child:          nil,
+			expectedStatus: Failure,
+		},
+		{
+			name:           "child succeeds, invert to failure",
+			child:          &Action{Run: func() Status { return Success }},
+			expectedStatus: Failure,
+		},
+		{
+			name:           "child fails, invert to success",
+			child:          &Action{Run: func() Status { return Failure }},
+			expectedStatus: Success,
+		},
+		{
+			name:           "child running, pass through",
+			child:          &Action{Run: func() Status { return Running }},
+			expectedStatus: Running,
+		},
+		{
+			name:           "child ready, pass through",
+			child:          &Action{Run: func() Status { return Ready }},
+			expectedStatus: Ready,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			invert := &Invert{Child: test.child}
+			status := invert.Tick()
+			if status != test.expectedStatus {
+				t.Errorf("Invert.Tick() = %v, want %v", status, test.expectedStatus)
+			}
+			if invert.Status() != test.expectedStatus {
+				t.Errorf("Invert.Status() = %v, want %v", invert.Status(), test.expectedStatus)
+			}
+		})
+	}
+}
+
+func TestInvert_InversionBehavior(t *testing.T) {
+	// Test repeated inversion behavior
+	var result Status
+	action := &Action{Run: func() Status { return result }}
+	invert := &Invert{Child: action}
+
+	// Test Success -> Failure
+	result = Success
+	status := invert.Tick()
+	if status != Failure {
+		t.Errorf("Expected Success to be inverted to Failure, got %v", status)
+	}
+
+	// Test Failure -> Success
+	result = Failure
+	status = invert.Tick()
+	if status != Success {
+		t.Errorf("Expected Failure to be inverted to Success, got %v", status)
+	}
+
+	// Test Running -> Running (no inversion)
+	result = Running
+	status = invert.Tick()
+	if status != Running {
+		t.Errorf("Expected Running to pass through unchanged, got %v", status)
+	}
+}
+
+func TestInvert_Reset(t *testing.T) {
+	child := &Action{Run: func() Status { return Success }}
+	invert := &Invert{Child: child}
+
+	// Set some status first
+	invert.Tick()
+
+	// Reset should set status to Ready and reset child
+	status := invert.Reset()
+	if status != Ready {
+		t.Errorf("Invert.Reset() = %v, want %v", status, Ready)
+	}
+	if invert.Status() != Ready {
+		t.Errorf("Invert.Status() after reset = %v, want %v", invert.Status(), Ready)
+	}
+	if child.Status() != Ready {
+		t.Errorf("Child status after Invert.Reset() = %v, want %v", child.Status(), Ready)
+	}
+}
+
+func TestInvert_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		child    Node
+		expected string
+	}{
+		{
+			name:     "no child",
+			child:    nil,
+			expected: "Invert (Ready)",
+		},
+		{
+			name:     "with child",
+			child:    &Action{Run: func() Status { return Success }},
+			expected: "Invert (Ready)\n  Action (Ready)",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			invert := &Invert{Child: test.child}
+			result := invert.String()
+			if result != test.expected {
+				t.Errorf("Invert.String() = %v, want %v", result, test.expected)
+			}
+		})
+	}
+}
+
+func TestComplexBehaviorTreeWithInvert(t *testing.T) {
+	// Create a complex tree: Sequence with inverted condition and action
+	var checkResult Status
+	var actionResult Status
+
+	condition := &Condition{Check: func() Status { return checkResult }}
+	invertedCondition := &Invert{Child: condition}
+	action := &Action{Run: func() Status { return actionResult }}
+
+	sequence := &Sequence{Children: []Node{invertedCondition, action}}
+	bt := New(sequence)
+
+	// Test 1: Original condition succeeds, inverted fails, sequence fails
+	checkResult = Success
+	actionResult = Success
+	status := bt.Tick()
+	if status != Failure {
+		t.Errorf("Expected Failure when inverted condition fails, got %v", status)
+	}
+
+	// Reset for next test
+	bt.Reset()
+
+	// Test 2: Original condition fails, inverted succeeds, action succeeds, sequence succeeds
+	checkResult = Failure
+	actionResult = Success
+	status = bt.Tick()
+	if status != Success {
+		t.Errorf("Expected Success when inverted condition and action succeed, got %v", status)
+	}
+
+	// Verify string representation includes all nodes
+	str := bt.String()
+	if !strings.Contains(str, "Invert") {
+		t.Errorf("BehaviorTree.String() should contain 'Invert', got %v", str)
+	}
+	if !strings.Contains(str, "Sequence") {
+		t.Errorf("BehaviorTree.String() should contain 'Sequence', got %v", str)
+	}
+	if !strings.Contains(str, "Condition") {
+		t.Errorf("BehaviorTree.String() should contain 'Condition', got %v", str)
+	}
+}
