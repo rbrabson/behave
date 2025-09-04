@@ -3,6 +3,7 @@ package behave
 import (
 	"context"
 	"log/slog"
+	"reflect"
 	"strconv"
 	"strings"
 )
@@ -662,12 +663,11 @@ func (i *Invert) String() string {
 	builder.WriteString(i.Status().String())
 	builder.WriteString(")")
 	if i.Child != nil {
-		builder.WriteString("\n  ")
-		str := i.Child.String()
-		lines := strings.Split(str, "\n")
-		for _, line := range lines {
-			builder.WriteString("\n  ")
-			builder.WriteString(line)
+		childStr := i.Child.String()
+		lines := strings.Split(childStr, "\n")
+		builder.WriteString("\n  " + lines[0])
+		for _, line := range lines[1:] {
+			builder.WriteString("\n  " + line)
 		}
 	}
 	return builder.String()
@@ -716,12 +716,11 @@ func (as *AlwaysSuccess) String() string {
 	builder.WriteString(as.Status().String())
 	builder.WriteString(")")
 	if as.Child != nil {
-		builder.WriteString("\n  ")
-		str := as.Child.String()
-		lines := strings.Split(str, "\n")
-		for _, line := range lines {
-			builder.WriteString("\n  ")
-			builder.WriteString(line)
+		childStr := as.Child.String()
+		lines := strings.Split(childStr, "\n")
+		builder.WriteString("\n  " + lines[0])
+		for _, line := range lines[1:] {
+			builder.WriteString("\n  " + line)
 		}
 	}
 	return builder.String()
@@ -770,12 +769,11 @@ func (af *AlwaysFailure) String() string {
 	builder.WriteString(af.Status().String())
 	builder.WriteString(")")
 	if af.Child != nil {
-		builder.WriteString("\n  ")
-		str := af.Child.String()
-		lines := strings.Split(str, "\n")
-		for _, line := range lines {
-			builder.WriteString("\n  ")
-			builder.WriteString(line)
+		childStr := af.Child.String()
+		lines := strings.Split(childStr, "\n")
+		builder.WriteString("\n  " + lines[0])
+		for _, line := range lines[1:] {
+			builder.WriteString("\n  " + line)
 		}
 	}
 	return builder.String()
@@ -861,12 +859,11 @@ func (rn *RepeatN) String() string {
 	builder.WriteString(strconv.Itoa(rn.MaxCount))
 	builder.WriteString(")")
 	if rn.Child != nil {
-		builder.WriteString("\n  ")
-		str := rn.Child.String()
-		lines := strings.Split(str, "\n")
-		for _, line := range lines {
-			builder.WriteString("\n  ")
-			builder.WriteString(line)
+		childStr := rn.Child.String()
+		lines := strings.Split(childStr, "\n")
+		builder.WriteString("\n  " + lines[0])
+		for _, line := range lines[1:] {
+			builder.WriteString("\n  " + line)
 		}
 	}
 	return builder.String()
@@ -926,12 +923,11 @@ func (ws *WhileSuccess) String() string {
 	builder.WriteString(ws.status.String())
 	builder.WriteString(")")
 	if ws.Child != nil {
-		builder.WriteString("\n  ")
-		str := ws.Child.String()
-		lines := strings.Split(str, "\n")
-		for _, line := range lines {
-			builder.WriteString("\n  ")
-			builder.WriteString(line)
+		childStr := ws.Child.String()
+		lines := strings.Split(childStr, "\n")
+		builder.WriteString("\n  " + lines[0])
+		for _, line := range lines[1:] {
+			builder.WriteString("\n  " + line)
 		}
 	}
 	return builder.String()
@@ -1071,41 +1067,8 @@ func (l *Log) getChildType() string {
 		return "nil"
 	}
 
-	// Use type assertion to get the actual type name
-	switch l.Child.(type) {
-	case *Action:
-		return "Action"
-	case *Condition:
-		return "Condition"
-	case *Sequence:
-		return "Sequence"
-	case *Selector:
-		return "Selector"
-	case *Parallel:
-		return "Parallel"
-	case *Composite:
-		return "Composite"
-	case *Retry:
-		return "Retry"
-	case *Repeat:
-		return "Repeat"
-	case *RepeatN:
-		return "RepeatN"
-	case *Invert:
-		return "Invert"
-	case *AlwaysSuccess:
-		return "AlwaysSuccess"
-	case *AlwaysFailure:
-		return "AlwaysFailure"
-	case *WhileSuccess:
-		return "WhileSuccess"
-	case *WhileFailure:
-		return "WhileFailure"
-	case *Log:
-		return "Log"
-	default:
-		return "Unknown"
-	}
+	t := reflect.TypeOf(l.Child)
+	return t.Elem().Name()
 }
 
 // Reset resets the Log node and its child to the Ready state.
