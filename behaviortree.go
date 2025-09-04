@@ -869,6 +869,52 @@ func (rn *RepeatN) String() string {
 	return builder.String()
 }
 
+// Forever represents a decorator node that runs its child forever, ignoring its status.
+type Forever struct {
+	Child  Node
+	status Status
+}
+
+// Tick executes the Forever node, always returning Running regardless of the child's status.
+func (f *Forever) Tick() Status {
+	if f.Child != nil {
+		f.Child.Tick()
+	}
+	f.status = Running
+	return Running
+}
+
+// Reset resets the Forever node and its child to the Ready state.
+func (f *Forever) Reset() Status {
+	f.status = Ready
+	if f.Child != nil {
+		f.Child.Reset()
+	}
+	return f.status
+}
+
+// Status returns the current status of the Forever node.
+func (f *Forever) Status() Status {
+	return f.status
+}
+
+// String returns a string representation of the Forever node.
+func (f *Forever) String() string {
+	var builder strings.Builder
+	builder.WriteString("Forever (")
+	builder.WriteString(f.status.String())
+	builder.WriteString(")")
+	if f.Child != nil {
+		childStr := f.Child.String()
+		lines := strings.Split(childStr, "\n")
+		builder.WriteString("\n  " + lines[0])
+		for _, line := range lines[1:] {
+			builder.WriteString("\n  " + line)
+		}
+	}
+	return builder.String()
+}
+
 // WhileSuccess represents a decorator node that returns Running as long as its child
 // is either Running or Success, and returns Failure otherwise.
 // This is useful for creating loops that continue while a condition remains true.

@@ -46,8 +46,8 @@ type Node interface {
 #### Decorator Nodes
 
 - **Retry**: Retries its child until it succeeds, ignoring all failures. Returns Success when child succeeds, Running while retrying.
-- **Repeat**: Repeats its child until it fails. Returns Running while child succeeds (and resets it), Failure when child fails.
-- **RepeatN**: Executes its child a specific number of times before returning the child's last result. Returns Running until MaxCount is reached.
+- **Repeat**: Executes its child a specific number of times before returning the child's last result. Returns Running until MaxCount is reached.
+- **Forever**: Runs its child forever, always returning Running and ignoring the child's status. Useful for infinite loops or background tasks.
 - **WhileSuccess**: Returns Running as long as its child is either Running or Success, and returns Failure otherwise. Useful for creating loops.
 - **WhileFailure**: Returns Running as long as its child is either Running or Failure, and returns Success otherwise. Useful for retry loops.
 - **Invert**: Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
