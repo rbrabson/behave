@@ -1,4 +1,3 @@
-
 # Behavior Tree
 
 ## Overview
@@ -938,6 +937,44 @@ func main() {
     }
     
     fmt.Printf("Completed after %d executions!\n", executions)
+}
+```
+
+## Forever Node Example
+
+The Forever node is useful for running a child node indefinitely, regardless of its status. This is helpful for background tasks, polling, or infinite loops. It can also execute the root node indefinitely if the behavior tree should always be running.
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    ticks := 0
+    // Action that prints a message and always succeeds
+    backgroundAction := &behave.Action{
+        Run: func() behave.Status {
+            ticks++
+            fmt.Printf("Background tick %d\n", ticks)
+            return behave.Success // Status is ignored by Forever
+        },
+    }
+
+    forever := &behave.Forever{Child: backgroundAction}
+    tree := behave.New(forever)
+
+    // Simulate ticking the tree for a few cycles
+    for i := 0; i < 5; i++ {
+        status := tree.Tick()
+        fmt.Printf("Tree status: %s\n", status.String())
+        time.Sleep(500 * time.Millisecond)
+    }
+
+    fmt.Printf("Background ran for %d ticks!\n", ticks)
 }
 ```
 
