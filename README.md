@@ -47,6 +47,7 @@ type Node interface {
 
 - **Retry**: Retries its child until it succeeds, ignoring all failures. Returns Success when child succeeds, Running while retrying.
 - **Repeat**: Executes its child a specific number of times before returning the child's last result. Returns Running until MaxCount is reached.
+- **RepeatN**: Executes its child a specific number of times before returning the child's last result. Returns Running until MaxCount is reached. Useful for controlled repetition. See example below.
 - **Forever**: Runs its child forever, always returning Running and ignoring the child's status. Useful for infinite loops or background tasks.
 - **WhileSuccess**: Returns Running as long as its child is either Running or Success, and returns Failure otherwise. Useful for creating loops.
 - **WhileFailure**: Returns Running as long as its child is either Running or Failure, and returns Success otherwise. Useful for retry loops.
