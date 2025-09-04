@@ -796,15 +796,8 @@ func (rn *RepeatN) Tick() Status {
 		return rn.status
 	}
 
-	// Handle edge case: MaxCount is 0
-	if rn.MaxCount <= 0 {
-		rn.status = rn.Child.Tick()
-		// Don't increment count for edge case where MaxCount is 0
-		return rn.status
-	}
-
 	// If we haven't reached the maximum count yet
-	if rn.Count < rn.MaxCount {
+	if rn.MaxCount <= 0 || rn.Count < rn.MaxCount {
 		// Execute the child
 		childStatus := rn.Child.Tick()
 
@@ -818,7 +811,7 @@ func (rn *RepeatN) Tick() Status {
 		rn.Count++
 
 		// If we've reached the maximum count, return the child's result
-		if rn.Count >= rn.MaxCount {
+		if rn.MaxCount > 0 && rn.Count >= rn.MaxCount {
 			rn.status = childStatus
 			return rn.status
 		}

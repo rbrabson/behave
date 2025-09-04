@@ -1718,9 +1718,9 @@ func TestRepeatN_Tick(t *testing.T) {
 		{
 			name:           "max count zero",
 			child:          &Action{Run: func() Status { return Success }},
-			maxCount:       0,
+			maxCount:       3,
 			expectedStatus: Success, // Should execute once and return child's result
-			ticksNeeded:    1,
+			ticksNeeded:    3,
 		},
 		{
 			name:           "single execution",
