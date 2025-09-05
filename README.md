@@ -669,86 +669,6 @@ func main() {
 }
 ```
 
-## Tree Structure Example
-
-You can compose trees using different node types:
-
-```go
-// Simple sequence
-seq := &behave.Sequence{
-    Children: []behave.Node{
-        &behave.Condition{Check: myCheckFunc},
-        &behave.Action{Run: myActionFunc},
-    },
-}
-
-// Selector with fallback
-sel := &behave.Selector{
-    Children: []behave.Node{seq, &behave.Action{Run: fallbackFunc}},
-}
-
-// Composite (condition + action)
-comp := &behave.Composite{
-    Condition: &behave.Condition{Check: guardFunc},
-    Child: &behave.Action{Run: protectedFunc},
-}
-
-// Parallel execution (at least 2 out of 3 must succeed)
-par := &behave.Parallel{
-    MinSuccessCount: 2,
-    Children: []behave.Node{
-        &behave.Action{Run: task1},
-        &behave.Action{Run: task2},
-        &behave.Action{Run: task3},
-    },
-}
-
-// Retry until success (keeps trying after failures)
-retry := &behave.Retry{
-    Child: &behave.Action{Run: unreliableFunc},
-}
-
-// Repeat a specific number of times
-repeatN := &behave.RepeatN{
-    MaxCount: 3,
-    Child: &behave.Action{Run: limitedFunc},
-}
-
-// Keep running while child succeeds or is running
-whileSuccess := &behave.WhileSuccess{
-    Child: &behave.Condition{Check: keepGoingFunc},
-}
-
-// Keep running while child fails or is running (retry pattern)
-whileFailure := &behave.WhileFailure{
-    Child: &behave.Action{Run: retryableFunc},
-}
-
-// Invert a condition (succeeds when condition fails)
-invertedCondition := &behave.Invert{
-    Child: &behave.Condition{Check: avoidThisFunc},
-}
-
-// Always succeed (useful for optional tasks)
-alwaysSuccess := &behave.AlwaysSuccess{
-    Child: &behave.Action{Run: optionalFunc},
-}
-
-// Always fail (useful for testing or negative conditions)
-alwaysFailure := &behave.AlwaysFailure{
-    Child: &behave.Action{Run: shouldFailFunc},
-}
-
-// Log node for debugging and monitoring
-loggedAction := &behave.Log{
-    Child:   &behave.Action{Run: importantFunc},
-    Message: "Executing critical operation",
-    LogLevel: func() *slog.Level { l := slog.LevelError; return &l }(), // Custom error level
-}
-
-tree := behave.New(par)
-```
-
 ## Retry Node Example
 
 The Retry node is particularly useful for unreliable operations that might fail but should eventually succeed:
@@ -1382,6 +1302,86 @@ func main() {
     fmt.Printf("Pipeline completed with status: %s\n", status.String())
     fmt.Printf("DB connections: %d, API calls: %d\n", dbConnections, apiCalls)
 }
+```
+
+## Tree Structure Example
+
+You can compose trees using different node types:
+
+```go
+// Simple sequence
+seq := &behave.Sequence{
+    Children: []behave.Node{
+        &behave.Condition{Check: myCheckFunc},
+        &behave.Action{Run: myActionFunc},
+    },
+}
+
+// Selector with fallback
+sel := &behave.Selector{
+    Children: []behave.Node{seq, &behave.Action{Run: fallbackFunc}},
+}
+
+// Composite (condition + action)
+comp := &behave.Composite{
+    Condition: &behave.Condition{Check: guardFunc},
+    Child: &behave.Action{Run: protectedFunc},
+}
+
+// Parallel execution (at least 2 out of 3 must succeed)
+par := &behave.Parallel{
+    MinSuccessCount: 2,
+    Children: []behave.Node{
+        &behave.Action{Run: task1},
+        &behave.Action{Run: task2},
+        &behave.Action{Run: task3},
+    },
+}
+
+// Retry until success (keeps trying after failures)
+retry := &behave.Retry{
+    Child: &behave.Action{Run: unreliableFunc},
+}
+
+// Repeat a specific number of times
+repeatN := &behave.RepeatN{
+    MaxCount: 3,
+    Child: &behave.Action{Run: limitedFunc},
+}
+
+// Keep running while child succeeds or is running
+whileSuccess := &behave.WhileSuccess{
+    Child: &behave.Condition{Check: keepGoingFunc},
+}
+
+// Keep running while child fails or is running (retry pattern)
+whileFailure := &behave.WhileFailure{
+    Child: &behave.Action{Run: retryableFunc},
+}
+
+// Invert a condition (succeeds when condition fails)
+invertedCondition := &behave.Invert{
+    Child: &behave.Condition{Check: avoidThisFunc},
+}
+
+// Always succeed (useful for optional tasks)
+alwaysSuccess := &behave.AlwaysSuccess{
+    Child: &behave.Action{Run: optionalFunc},
+}
+
+// Always fail (useful for testing or negative conditions)
+alwaysFailure := &behave.AlwaysFailure{
+    Child: &behave.Action{Run: shouldFailFunc},
+}
+
+// Log node for debugging and monitoring
+loggedAction := &behave.Log{
+    Child:   &behave.Action{Run: importantFunc},
+    Message: "Executing critical operation",
+    LogLevel: func() *slog.Level { l := slog.LevelError; return &l }(), // Custom error level
+}
+
+tree := behave.New(par)
 ```
 
 ## Reset Functionality
