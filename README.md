@@ -40,16 +40,16 @@ type Node interface {
 - **Composite**: Combines a condition with any other node. First checks the condition, and if it succeeds, runs the child node.
 - **Sequence**: Runs children in order; fails or returns running if any child fails or is running, succeeds if all succeed.
 - **Selector**: Runs children in order; succeeds or returns running if any child succeeds or is running, fails if all fail.
-- **Parallel**: Runs all children in parallel; succeeds if at least `MinSuccessCount` children succeed.
+- **Parallel**: Runs all children in parallel; succeeds if at least `MinSuccessCount` children succeed, fails if it becomes impossible to reach MinSuccessCount (too many failures), and returns Running while children are still executing.
 
 #### Decorator Nodes
 
 - **Retry**: Retries its child until it succeeds, ignoring all failures. Returns Success when child succeeds, Running while retrying.
 - **Repeat**: Repeats its child node until the child returns Failure. Returns Running while the child returns Success or Running, and returns Failure when the child fails. Useful for tasks that should continue until a failure occurs.
-- **RepeatN**: Executes its child a specific number of times before returning the child's last result. Returns Running until MaxCount is reached. Useful for controlled repetition. See example below.
+- **RepeatN**: Executes its child a specific number of times (MaxCount). Returns Running while the execution count is below MaxCount, then returns the child's final result. Useful for controlled repetition. See example below.
 - **Forever**: Runs its child forever, always returning Running and ignoring the child's status. Useful for infinite loops or background tasks.
-- **WhileSuccess**: Returns Running as long as its child is either Running or Success, and returns Failure otherwise. Useful for creating loops.
-- **WhileFailure**: Returns Running as long as its child is either Running or Failure, and returns Success otherwise. Useful for retry loops.
+- **WhileSuccess**: Repeatedly runs its child as long as it returns Success or Running. Returns Running while the child succeeds (resetting it for the next iteration) or is running, and returns Failure when the child fails. Useful for creating loops that continue until failure.
+- **WhileFailure**: Repeatedly runs its child as long as it returns Failure or Running. Returns Running while the child fails (resetting it for retry) or is running, and returns Success when the child succeeds. Useful for retry loops that continue until success.
 - **Invert**: Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
 - **AlwaysSuccess**: Always returns Success regardless of its child's result. Useful for ensuring a branch always succeeds.
 - **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
