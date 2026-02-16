@@ -7,66 +7,66 @@ import (
 	"time"
 )
 
-func TestForDuration_Tick(t *testing.T) {
+func TestWithTimeout_Tick(t *testing.T) {
 	// Action that always returns Success
 	action := &Action{Run: func() Status { return Success }}
 	duration := 200 * time.Millisecond
-	forDuration := &ForDuration{Child: action, Duration: duration}
+	withTimeout := &WithTimeout{Child: action, Duration: duration}
 
 	// Should return Success immediately since the child always returns Success
-	status := forDuration.Tick()
+	status := withTimeout.Tick()
 	if status != Success {
-		t.Errorf("ForDuration.Tick() = %v, want %v (child completes immediately)", status, Success)
+		t.Errorf("WithTimeout.Tick() = %v, want %v (child completes immediately)", status, Success)
 	}
 	time.Sleep(duration + 20*time.Millisecond)
 	// After duration, should still return Success
-	status = forDuration.Tick()
+	status = withTimeout.Tick()
 	if status != Success {
-		t.Errorf("ForDuration.Tick() after duration = %v, want %v", status, Success)
+		t.Errorf("WithTimeout.Tick() after duration = %v, want %v", status, Success)
 	}
 }
 
-func TestForDuration_ChildFailure(t *testing.T) {
+func TestWithTimeout_ChildFailure(t *testing.T) {
 	// Action that returns Failure
 	action := &Action{Run: func() Status { return Failure }}
 	duration := 100 * time.Millisecond
-	forDuration := &ForDuration{Child: action, Duration: duration}
+	withTimeout := &WithTimeout{Child: action, Duration: duration}
 
 	// Should return Failure immediately since the child always returns Failure
-	status := forDuration.Tick()
+	status := withTimeout.Tick()
 	if status != Failure {
-		t.Errorf("ForDuration.Tick() = %v, want %v (child completes immediately)", status, Failure)
+		t.Errorf("WithTimeout.Tick() = %v, want %v (child completes immediately)", status, Failure)
 	}
 	time.Sleep(duration + 20*time.Millisecond)
 	// After duration, should still return Failure
-	status = forDuration.Tick()
+	status = withTimeout.Tick()
 	if status != Failure {
-		t.Errorf("ForDuration.Tick() after duration = %v, want %v", status, Failure)
+		t.Errorf("WithTimeout.Tick() after duration = %v, want %v", status, Failure)
 	}
 }
 
-func TestForDuration_Reset(t *testing.T) {
+func TestWithTimeout_Reset(t *testing.T) {
 	action := &Action{Run: func() Status { return Success }}
 	duration := 50 * time.Millisecond
-	forDuration := &ForDuration{Child: action, Duration: duration}
+	withTimeout := &WithTimeout{Child: action, Duration: duration}
 
 	// Run once (should complete immediately)
-	forDuration.Tick()
+	withTimeout.Tick()
 	time.Sleep(duration + 10*time.Millisecond)
-	forDuration.Tick()
+	withTimeout.Tick()
 
 	// Reset should set status to Ready and allow reuse
-	status := forDuration.Reset()
+	status := withTimeout.Reset()
 	if status != Ready {
-		t.Errorf("ForDuration.Reset() = %v, want %v", status, Ready)
+		t.Errorf("WithTimeout.Reset() = %v, want %v", status, Ready)
 	}
-	if forDuration.Status() != Ready {
-		t.Errorf("ForDuration.Status() after Reset() = %v, want %v", forDuration.Status(), Ready)
+	if withTimeout.Status() != Ready {
+		t.Errorf("WithTimeout.Status() after Reset() = %v, want %v", withTimeout.Status(), Ready)
 	}
 	// Should run again after reset and complete immediately
-	status = forDuration.Tick()
+	status = withTimeout.Tick()
 	if status != Success {
-		t.Errorf("ForDuration.Tick() after Reset() = %v, want %v", status, Success)
+		t.Errorf("WithTimeout.Tick() after Reset() = %v, want %v", status, Success)
 	}
 }
 

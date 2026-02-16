@@ -55,7 +55,7 @@ type Node interface {
 - **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
 - **Log**: Executes its child and logs the result using structured logging (slog). Returns the child's status unchanged. Supports custom log levels or uses defaults (Info for Success, Warn for Failure, Debug for Running/Ready). Useful for debugging and monitoring.
 
-- **ForDuration**: Runs its child node for a specified duration (using Go's `time.Duration`). If the child's last status returned is Success or Failure, it returns that status, even if the duration hasn't expired. Otherwise, it returns Running while the duration has not elapsed, and returns failure after the duration if the child still returns Running. Useful for time-limited behaviors, polling, or enforcing timeouts.
+- **WithTimeout**: Runs its child node for at most the specified duration (using Go's `time.Duration`). If the child completes (returns Success or Failure) before the duration expires, WithTimeout returns that status immediately. If the duration expires while the child is still running (status == Ready or Running), WithTimeout returns Failure. Useful for time-limited behaviors, polling, or enforcing timeouts.
 
 ### BehaviorTree
 
@@ -822,9 +822,9 @@ func main() {
 
 ## RepeatN Node Example
 
-## ForDuration Node Example
+## WithTimeout Node Example
 
-The ForDuration decorator runs its child node for a specified period of time, returning Running until the duration elapses. After the duration, it returns the child's last status. This is useful for time-limited actions, polling, or enforcing timeouts.
+The WithTimeout decorator runs its child node for at most the specified duration. If the child completes (returns Success or Failure) before the duration expires, WithTimeout returns that status immediately. If the duration expires while the child is still running, WithTimeout returns Failure.
 
 ```go
 package main
@@ -846,14 +846,14 @@ func main() {
     }
 
     // Run the action for 1 second
-    forDuration := &behave.ForDuration{
+    withTimeout := &behave.WithTimeout{
         Child:    timedAction,
         Duration: 1 * time.Second,
     }
 
-    tree := behave.New(forDuration)
+    tree := behave.New(withTimeout)
 
-    fmt.Println("=== ForDuration Example ===")
+    fmt.Println("=== WithTimeout Example ===")
     start := time.Now()
     for tree.Status() == behave.Ready || tree.Status() == behave.Running {
         status := tree.Tick()

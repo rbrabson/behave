@@ -1042,71 +1042,71 @@ func (wf *WhileFailure) String() string {
 	return builder.String()
 }
 
-// ForDuration represents a decorator node that runs its child for a maximu duration.
+// WithTimeout represents a decorator node that runs its child for a maximum duration.
 // If the child returns Success or Failure before the duration expires, it returns that status.
 // If the duration expires while the child is still Running, it returns Failure.
-type ForDuration struct {
+type WithTimeout struct {
 	Child     Node
 	Duration  time.Duration
 	startTime time.Time
 	status    Status
 }
 
-func (fd *ForDuration) Tick() Status {
-	if fd.Child == nil {
-		fd.status = Failure
-		return fd.status
+func (wt *WithTimeout) Tick() Status {
+	if wt.Child == nil {
+		wt.status = Failure
+		return wt.status
 	}
 
 	// If this is the first tick, start the timer
-	if fd.startTime.IsZero() {
-		fd.startTime = time.Now()
+	if wt.startTime.IsZero() {
+		wt.startTime = time.Now()
 	}
 
-	childStatus := fd.Child.Tick()
+	childStatus := wt.Child.Tick()
 
 	switch childStatus {
 	case Success, Failure:
-		fd.status = childStatus
-		return fd.status
+		wt.status = childStatus
+		return wt.status
 	case Running:
-		if time.Since(fd.startTime) >= fd.Duration {
-			fd.status = Failure // Time's up, child is still running
-			return fd.status
+		if time.Since(wt.startTime) >= wt.Duration {
+			wt.status = Failure // Time's up, child is still running
+			return wt.status
 		}
-		fd.status = Running
-		return fd.status
+		wt.status = Running
+		return wt.status
 	default:
-		fd.status = Failure
-		return fd.status
+		wt.status = Failure
+		return wt.status
 	}
 }
 
-// Reset resets the ForDuration node and its child to the Ready state.
-func (fd *ForDuration) Reset() Status {
-	fd.status = Ready
-	fd.startTime = time.Time{}
-	if fd.Child != nil {
-		fd.Child.Reset()
+// Reset resets the WithTimeout node and its child to the Ready state.
+func (wt *WithTimeout) Reset() Status {
+	wt.status = Ready
+	wt.startTime = time.Time{}
+	if wt.Child != nil {
+		wt.Child.Reset()
 	}
-	return fd.status
+	return wt.status
 }
 
-// Status returns the current status of the ForDuration node.
-func (fd *ForDuration) Status() Status {
-	return fd.status
+// Status returns the current status of the WithTimeout node.
+func (wt *WithTimeout) Status() Status {
+	return wt.status
 }
 
-// String returns a string representation of the ForDuration node.
-func (fd *ForDuration) String() string {
+// String returns a string representation of the WithTimeout node.
+func (wt *WithTimeout) String() string {
 	var builder strings.Builder
-	builder.WriteString("ForDuration (")
-	builder.WriteString(fd.status.String())
+	builder.WriteString("WithTimeout (")
+	builder.WriteString(wt.status.String())
 	builder.WriteString(", Duration: ")
-	builder.WriteString(fd.Duration.String())
+	builder.WriteString(wt.Duration.String())
 	builder.WriteString(")")
-	if fd.Child != nil {
-		childStr := fd.Child.String()
+	if wt.Child != nil {
+		childStr := wt.Child.String()
 		lines := strings.Split(childStr, "\n")
 		builder.WriteString("\n  " + lines[0])
 		for _, line := range lines[1:] {
