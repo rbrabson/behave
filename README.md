@@ -55,7 +55,7 @@ type Node interface {
 - **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
 - **Log**: Executes its child and logs the result using structured logging (slog). Returns the child's status unchanged. Supports custom log levels or uses defaults (Info for Success, Warn for Failure, Debug for Running/Ready). Useful for debugging and monitoring.
 
-- **ForDuration**: Runs its child node for a specified duration (using Go's `time.Duration`). Returns Running while the duration has not elapsed, and returns the child's last status after the duration. Useful for time-limited behaviors, polling, or enforcing timeouts.
+- **ForDuration**: Runs its child node for a specified duration (using Go's `time.Duration`). If the child's last status returned is Success or Failure, it returns that status, even if the duration hasn't expired. Otherwise, it returns Running while the duration has not elapsed, and returns failure after the duration if the child still returns Running. Useful for time-limited behaviors, polling, or enforcing timeouts.
 
 ### BehaviorTree
 
