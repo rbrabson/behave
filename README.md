@@ -55,6 +55,8 @@ type Node interface {
 - **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
 - **Log**: Executes its child and logs the result using structured logging (slog). Returns the child's status unchanged. Supports custom log levels or uses defaults (Info for Success, Warn for Failure, Debug for Running/Ready). Useful for debugging and monitoring.
 
+- **ForDuration**: Runs its child node for a specified duration (using Go's `time.Duration`). Returns Running while the duration has not elapsed, and returns the child's last status after the duration. Useful for time-limited behaviors, polling, or enforcing timeouts.
+
 ### BehaviorTree
 
 The `BehaviorTree` struct manages the root node and provides methods to tick, reset, and get the status of the tree.
@@ -819,6 +821,49 @@ func main() {
 ```
 
 ## RepeatN Node Example
+
+## ForDuration Node Example
+
+The ForDuration decorator runs its child node for a specified period of time, returning Running until the duration elapses. After the duration, it returns the child's last status. This is useful for time-limited actions, polling, or enforcing timeouts.
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+    "github.com/rbrabson/behave"
+)
+
+func main() {
+    ticks := 0
+    timedAction := &behave.Action{
+        Run: func() behave.Status {
+            ticks++
+            fmt.Printf("Tick %d\n", ticks)
+            return behave.Success
+        },
+    }
+
+    // Run the action for 1 second
+    forDuration := &behave.ForDuration{
+        Child:    timedAction,
+        Duration: 1 * time.Second,
+    }
+
+    tree := behave.New(forDuration)
+
+    fmt.Println("=== ForDuration Example ===")
+    start := time.Now()
+    for tree.Status() == behave.Ready || tree.Status() == behave.Running {
+        status := tree.Tick()
+        fmt.Printf("Status: %s\n", status.String())
+        time.Sleep(200 * time.Millisecond)
+    }
+    elapsed := time.Since(start)
+    fmt.Printf("Completed after %v and %d ticks!\n", elapsed, ticks)
+}
+```
 
 The RepeatN node executes its child a specific number of times, which is useful for controlled repetition:
 

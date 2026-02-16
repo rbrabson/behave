@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Status represents the result of a behavior tree node's execution.
@@ -1036,6 +1037,80 @@ func (wf *WhileFailure) String() string {
 		for _, line := range lines {
 			builder.WriteString("\n  ")
 			builder.WriteString(line)
+		}
+	}
+	return builder.String()
+}
+
+// ForDuration represents a decorator node that runs its child for a maximu duration.
+// If the child returns Success or Failure before the duration expires, it returns that status.
+// If the duration expires while the child is still Running, it returns Failure.
+type ForDuration struct {
+	Child     Node
+	Duration  time.Duration
+	startTime time.Time
+	status    Status
+}
+
+func (fd *ForDuration) Tick() Status {
+	if fd.Child == nil {
+		fd.status = Failure
+		return fd.status
+	}
+
+	// If this is the first tick, start the timer
+	if fd.startTime.IsZero() {
+		fd.startTime = time.Now()
+	}
+
+	childStatus := fd.Child.Tick()
+
+	switch childStatus {
+	case Success, Failure:
+		fd.status = childStatus
+		return fd.status
+	case Running:
+		if time.Since(fd.startTime) >= fd.Duration {
+			fd.status = Failure // Time's up, child is still running
+			return fd.status
+		}
+		fd.status = Running
+		return fd.status
+	default:
+		fd.status = Failure
+		return fd.status
+	}
+}
+
+// Reset resets the ForDuration node and its child to the Ready state.
+func (fd *ForDuration) Reset() Status {
+	fd.status = Ready
+	fd.startTime = time.Time{}
+	if fd.Child != nil {
+		fd.Child.Reset()
+	}
+	return fd.status
+}
+
+// Status returns the current status of the ForDuration node.
+func (fd *ForDuration) Status() Status {
+	return fd.status
+}
+
+// String returns a string representation of the ForDuration node.
+func (fd *ForDuration) String() string {
+	var builder strings.Builder
+	builder.WriteString("ForDuration (")
+	builder.WriteString(fd.status.String())
+	builder.WriteString(", Duration: ")
+	builder.WriteString(fd.Duration.String())
+	builder.WriteString(")")
+	if fd.Child != nil {
+		childStr := fd.Child.String()
+		lines := strings.Split(childStr, "\n")
+		builder.WriteString("\n  " + lines[0])
+		for _, line := range lines[1:] {
+			builder.WriteString("\n  " + line)
 		}
 	}
 	return builder.String()

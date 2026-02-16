@@ -4,7 +4,84 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestForDuration_Tick(t *testing.T) {
+	// Action that always returns Success
+	action := &Action{Run: func() Status { return Success }}
+	duration := 200 * time.Millisecond
+	forDuration := &ForDuration{Child: action, Duration: duration}
+
+	// Should return Running until duration elapses
+	start := time.Now()
+	ran := false
+	for {
+		status := forDuration.Tick()
+		if !ran && status == Running {
+			ran = true // Ensure we see Running at least once
+		}
+		if time.Since(start) > duration+50*time.Millisecond {
+			break
+		}
+		if status != Running && time.Since(start) < duration {
+			t.Errorf("ForDuration.Tick() returned %v before duration elapsed", status)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	// After duration, should return child's last status
+	status := forDuration.Tick()
+	if status != Success {
+		t.Errorf("ForDuration.Tick() after duration = %v, want %v", status, Success)
+	}
+	if !ran {
+		t.Error("ForDuration.Tick() never returned Running during duration")
+	}
+}
+
+func TestForDuration_ChildFailure(t *testing.T) {
+	// Action that returns Failure
+	action := &Action{Run: func() Status { return Failure }}
+	duration := 100 * time.Millisecond
+	forDuration := &ForDuration{Child: action, Duration: duration}
+
+	// Should return Running during duration
+	status := forDuration.Tick()
+	if status != Running {
+		t.Errorf("ForDuration.Tick() = %v, want %v (during duration)", status, Running)
+	}
+	time.Sleep(duration + 20*time.Millisecond)
+	// After duration, should return Failure
+	status = forDuration.Tick()
+	if status != Failure {
+		t.Errorf("ForDuration.Tick() after duration = %v, want %v", status, Failure)
+	}
+}
+
+func TestForDuration_Reset(t *testing.T) {
+	action := &Action{Run: func() Status { return Success }}
+	duration := 50 * time.Millisecond
+	forDuration := &ForDuration{Child: action, Duration: duration}
+
+	// Run until duration elapses
+	forDuration.Tick()
+	time.Sleep(duration + 10*time.Millisecond)
+	forDuration.Tick()
+
+	// Reset should set status to Ready and allow reuse
+	status := forDuration.Reset()
+	if status != Ready {
+		t.Errorf("ForDuration.Reset() = %v, want %v", status, Ready)
+	}
+	if forDuration.Status() != Ready {
+		t.Errorf("ForDuration.Status() after Reset() = %v, want %v", forDuration.Status(), Ready)
+	}
+	// Should run again after reset
+	status = forDuration.Tick()
+	if status != Running {
+		t.Errorf("ForDuration.Tick() after Reset() = %v, want %v", status, Running)
+	}
+}
 
 func TestStatus_String(t *testing.T) {
 	tests := []struct {
