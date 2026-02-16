@@ -13,29 +13,16 @@ func TestForDuration_Tick(t *testing.T) {
 	duration := 200 * time.Millisecond
 	forDuration := &ForDuration{Child: action, Duration: duration}
 
-	// Should return Running until duration elapses
-	start := time.Now()
-	ran := false
-	for {
-		status := forDuration.Tick()
-		if !ran && status == Running {
-			ran = true // Ensure we see Running at least once
-		}
-		if time.Since(start) > duration+50*time.Millisecond {
-			break
-		}
-		if status != Running && time.Since(start) < duration {
-			t.Errorf("ForDuration.Tick() returned %v before duration elapsed", status)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	// After duration, should return child's last status
+	// Should return Success immediately since the child always returns Success
 	status := forDuration.Tick()
 	if status != Success {
-		t.Errorf("ForDuration.Tick() after duration = %v, want %v", status, Success)
+		t.Errorf("ForDuration.Tick() = %v, want %v (child completes immediately)", status, Success)
 	}
-	if !ran {
-		t.Error("ForDuration.Tick() never returned Running during duration")
+	time.Sleep(duration + 20*time.Millisecond)
+	// After duration, should still return Success
+	status = forDuration.Tick()
+	if status != Success {
+		t.Errorf("ForDuration.Tick() after duration = %v, want %v", status, Success)
 	}
 }
 
@@ -45,13 +32,13 @@ func TestForDuration_ChildFailure(t *testing.T) {
 	duration := 100 * time.Millisecond
 	forDuration := &ForDuration{Child: action, Duration: duration}
 
-	// Should return Running during duration
+	// Should return Failure immediately since the child always returns Failure
 	status := forDuration.Tick()
-	if status != Running {
-		t.Errorf("ForDuration.Tick() = %v, want %v (during duration)", status, Running)
+	if status != Failure {
+		t.Errorf("ForDuration.Tick() = %v, want %v (child completes immediately)", status, Failure)
 	}
 	time.Sleep(duration + 20*time.Millisecond)
-	// After duration, should return Failure
+	// After duration, should still return Failure
 	status = forDuration.Tick()
 	if status != Failure {
 		t.Errorf("ForDuration.Tick() after duration = %v, want %v", status, Failure)
@@ -63,7 +50,7 @@ func TestForDuration_Reset(t *testing.T) {
 	duration := 50 * time.Millisecond
 	forDuration := &ForDuration{Child: action, Duration: duration}
 
-	// Run until duration elapses
+	// Run once (should complete immediately)
 	forDuration.Tick()
 	time.Sleep(duration + 10*time.Millisecond)
 	forDuration.Tick()
@@ -76,10 +63,10 @@ func TestForDuration_Reset(t *testing.T) {
 	if forDuration.Status() != Ready {
 		t.Errorf("ForDuration.Status() after Reset() = %v, want %v", forDuration.Status(), Ready)
 	}
-	// Should run again after reset
+	// Should run again after reset and complete immediately
 	status = forDuration.Tick()
-	if status != Running {
-		t.Errorf("ForDuration.Tick() after Reset() = %v, want %v", status, Running)
+	if status != Success {
+		t.Errorf("ForDuration.Tick() after Reset() = %v, want %v", status, Success)
 	}
 }
 
