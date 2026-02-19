@@ -185,42 +185,37 @@ func main() {
     
     // Simple condition check
     temperatureCheck := &behave.Condition{
-        Check: func() behave.Status {
+        Check: func() bool {
             fmt.Printf("Checking temperature: %.1f°C\n", temperature)
             if temperature < 25.0 {
                 fmt.Println("Temperature OK")
-                return behave.Success
+                return true
             }
             fmt.Println("Temperature too high!")
-            return behave.Failure
+            return false
         },
     }
     
     // System readiness check
     readinessCheck := &behave.Condition{
-        Check: func() behave.Status {
+        Check: func() bool {
             fmt.Printf("System ready: %t\n", isSystemReady)
-            if isSystemReady {
-                return behave.Success
-            }
-            return behave.Failure
+            return isSystemReady
         },
     }
     
     // Complex condition with multiple factors
     complexCheck := &behave.Condition{
-        Check: func() behave.Status {
+        Check: func() bool {
             hour := time.Now().Hour()
             fmt.Printf("Current hour: %d\n", hour)
-            
             // Business hours check (9 AM to 5 PM)
             if hour >= 9 && hour < 17 {
                 fmt.Println("Within business hours")
-                return behave.Success
+                return true
             }
-            
             fmt.Println("Outside business hours")
-            return behave.Failure
+            return false
         },
     }
     
@@ -587,14 +582,14 @@ func main() {
     
     // Permission check condition
     permissionCheck := &behave.Condition{
-        Check: func() behave.Status {
+        Check: func() bool {
             fmt.Printf("Checking permission: %t\n", hasPermission)
             if hasPermission {
                 fmt.Println("Permission granted!")
-                return behave.Success
+                return true
             }
             fmt.Println("Permission denied!")
-            return behave.Failure
+            return false
         },
     }
     
@@ -629,12 +624,9 @@ func main() {
     
     // More complex example with multiple conditions
     resourceCheck := &behave.Condition{
-        Check: func() behave.Status {
+        Check: func() bool {
             fmt.Printf("Resource available: %t\n", resourceAvailable)
-            if resourceAvailable {
-                return behave.Success
-            }
-            return behave.Failure
+            return resourceAvailable
         },
     }
     
@@ -779,12 +771,9 @@ func main() {
     
     // Condition that checks if enemy is near
     enemyCheck := &behave.Condition{
-        Check: func() behave.Status {
+        Check: func() boolean {
             fmt.Printf("Enemy near: %t\n", isEnemyNear)
-            if isEnemyNear {
-                return behave.Success
-            }
-            return behave.Failure
+            return isEnemyNear
         },
     }
     
@@ -1036,17 +1025,17 @@ func main() {
     
     // Condition that succeeds a limited number of times
     resourceCheck := &behave.Condition{
-        Check: func() behave.Status {
+        Check: func() bool {
             attempts++
             fmt.Printf("Attempt %d: ", attempts)
             
             if attempts <= maxAttempts {
                 fmt.Println("Resources available - continuing!")
-                return behave.Success
+                return true
             }
             
             fmt.Println("Resources depleted - stopping!")
-            return behave.Failure
+            return false
         },
     }
     

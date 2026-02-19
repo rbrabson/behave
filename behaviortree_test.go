@@ -238,14 +238,14 @@ func TestCondition_Tick(t *testing.T) {
 		{
 			name: "success",
 			condition: &Condition{
-				Check: func() Status { return Success },
+				Check: func() bool { return true },
 			},
 			expected: Success,
 		},
 		{
 			name: "failure",
 			condition: &Condition{
-				Check: func() Status { return Failure },
+				Check: func() bool { return false },
 			},
 			expected: Failure,
 		},
@@ -440,39 +440,39 @@ func TestComposite_Tick(t *testing.T) {
 		},
 		{
 			name:       "single condition succeeds, no child",
-			conditions: []Node{&Condition{Check: func() Status { return Success }}},
+			conditions: []Node{&Condition{Check: func() bool { return true }}},
 			child:      nil,
 			expected:   Success,
 		},
 		{
 			name:       "single condition succeeds, child succeeds",
-			conditions: []Node{&Condition{Check: func() Status { return Success }}},
+			conditions: []Node{&Condition{Check: func() bool { return true }}},
 			child:      &Action{Run: func() Status { return Success }},
 			expected:   Success,
 		},
 		{
 			name:       "single condition succeeds, child fails",
-			conditions: []Node{&Condition{Check: func() Status { return Success }}},
+			conditions: []Node{&Condition{Check: func() bool { return false }}},
 			child:      &Action{Run: func() Status { return Failure }},
 			expected:   Failure,
 		},
 		{
 			name:       "single condition fails, child not executed",
-			conditions: []Node{&Condition{Check: func() Status { return Failure }}},
+			conditions: []Node{&Condition{Check: func() bool { return false }}},
 			child:      &Action{Run: func() Status { return Success }},
 			expected:   Failure,
 		},
 		{
 			name:       "single condition running",
-			conditions: []Node{&Condition{Check: func() Status { return Running }}},
+			conditions: []Node{&Condition{Check: func() bool { return false }}},
 			child:      &Action{Run: func() Status { return Success }},
-			expected:   Running,
+			expected:   Failure,
 		},
 		{
 			name: "multiple conditions all succeed, child succeeds",
 			conditions: []Node{
-				&Condition{Check: func() Status { return Success }},
-				&Condition{Check: func() Status { return Success }},
+				&Condition{Check: func() bool { return true }},
+				&Condition{Check: func() bool { return true }},
 			},
 			child:    &Action{Run: func() Status { return Success }},
 			expected: Success,
@@ -480,8 +480,8 @@ func TestComposite_Tick(t *testing.T) {
 		{
 			name: "multiple conditions, first fails",
 			conditions: []Node{
-				&Condition{Check: func() Status { return Failure }},
-				&Condition{Check: func() Status { return Success }},
+				&Condition{Check: func() bool { return false }},
+				&Condition{Check: func() bool { return true }},
 			},
 			child:    &Action{Run: func() Status { return Success }},
 			expected: Failure,
@@ -489,8 +489,8 @@ func TestComposite_Tick(t *testing.T) {
 		{
 			name: "multiple conditions, second fails",
 			conditions: []Node{
-				&Condition{Check: func() Status { return Success }},
-				&Condition{Check: func() Status { return Failure }},
+				&Condition{Check: func() bool { return true }},
+				&Condition{Check: func() bool { return false }},
 			},
 			child:    &Action{Run: func() Status { return Success }},
 			expected: Failure,
@@ -498,11 +498,11 @@ func TestComposite_Tick(t *testing.T) {
 		{
 			name: "multiple conditions, first running",
 			conditions: []Node{
-				&Condition{Check: func() Status { return Running }},
-				&Condition{Check: func() Status { return Success }},
+				&Condition{Check: func() bool { return false }},
+				&Condition{Check: func() bool { return true }},
 			},
 			child:    &Action{Run: func() Status { return Success }},
-			expected: Running,
+			expected: Failure,
 		},
 	}
 
@@ -521,7 +521,7 @@ func TestComposite_Tick(t *testing.T) {
 }
 
 func TestComposite_Reset(t *testing.T) {
-	conditions := []Node{&Condition{Check: func() Status { return Success }}}
+	conditions := []Node{&Condition{Check: func() bool { return true }}}
 	child := &Action{Run: func() Status { return Success }}
 	composite := &Composite{Conditions: conditions, Child: child}
 
@@ -704,7 +704,7 @@ func TestAction_Reset(t *testing.T) {
 }
 
 func TestCondition_Reset(t *testing.T) {
-	condition := &Condition{Check: func() Status { return Success }}
+	condition := &Condition{Check: func() bool { return true }}
 
 	// Set some status first
 	condition.Tick()
@@ -714,8 +714,8 @@ func TestCondition_Reset(t *testing.T) {
 	if status != Ready {
 		t.Errorf("Condition.Reset() = %v, want %v", status, Ready)
 	}
-	if condition.Status() != Ready {
-		t.Errorf("Condition.Status() after Reset() = %v, want %v", condition.Status(), Ready)
+	if condition.Status() != Success {
+		t.Errorf("Condition.Status() after Reset() = %v, want %v", condition.Status(), Success)
 	}
 }
 
@@ -784,13 +784,13 @@ func TestComplexBehaviorTreeWithNewNodes(t *testing.T) {
 	// Parallel node with Composite children
 
 	// Composite 1: Check health > 50 AND heal if needed
-	healthCheck := &Condition{Check: func() Status { return Success }} // Health > 50
-	healAction := &Action{Run: func() Status { return Success }}       // Heal action
+	healthCheck := &Condition{Check: func() bool { return true }} // Health > 50
+	healAction := &Action{Run: func() Status { return Success }}  // Heal action
 	composite1 := &Composite{Conditions: []Node{healthCheck}, Child: healAction}
 
 	// Composite 2: Check enemy nearby AND attack
-	enemyCheck := &Condition{Check: func() Status { return Success }} // Enemy nearby
-	attackAction := &Action{Run: func() Status { return Success }}    // Attack action
+	enemyCheck := &Condition{Check: func() bool { return true }}   // Enemy nearby
+	attackAction := &Action{Run: func() Status { return Success }} // Attack action
 	composite2 := &Composite{Conditions: []Node{enemyCheck}, Child: attackAction}
 
 	// Parallel node: Execute both composites, need at least 1 to succeed
@@ -1237,9 +1237,9 @@ func TestComplexBehaviorTreeWithRepeat(t *testing.T) {
 	// Sequence that succeeds a few times then fails
 	taskSequence := &Sequence{
 		Children: []Node{
-			&Condition{Check: func() Status {
+			&Condition{Check: func() bool {
 				attempts++
-				return Success // Always pass condition
+				return true // Always pass condition
 			}},
 			&Action{Run: func() Status {
 				if attempts <= 3 {
@@ -1424,7 +1424,7 @@ func TestComplexBehaviorTreeWithInvert(t *testing.T) {
 	var checkResult Status
 	var actionResult Status
 
-	condition := &Condition{Check: func() Status { return checkResult }}
+	condition := &Condition{Check: func() bool { return checkResult == Success }}
 	invertedCondition := &Invert{Child: condition}
 	action := &Action{Run: func() Status { return actionResult }}
 

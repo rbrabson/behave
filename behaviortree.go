@@ -135,36 +135,28 @@ func (a *Action) String() string {
 
 // Condition is a leaf node that checks a condition.
 type Condition struct {
-	Check  func() Status
-	status Status
+	Check func() bool
 }
 
 // Tick executes the condition's Check function.
 func (c *Condition) Tick() Status {
-	if c.Check == nil {
-		c.status = Failure
-		return c.status
-	}
-	status := c.Check()
-	switch status {
-	case Ready, Running, Success, Failure:
-		c.status = status
-		return c.status
-	default:
-		c.status = Failure
-		return c.status
-	}
+	return c.Status()
 }
 
 // Reset resets the Condition node to its initial state.
 func (c *Condition) Reset() Status {
-	c.status = Ready
-	return c.status
+	return Ready
 }
 
 // Status returns the current status of the Condition node.
 func (c *Condition) Status() Status {
-	return c.status
+	if c.Check == nil {
+		return Failure
+	}
+	if c.Check() {
+		return Success
+	}
+	return Failure
 }
 
 // String returns a string representation of the Condition node.
@@ -200,8 +192,8 @@ func (c *Composite) Tick() Status {
 	}
 
 	// Check all conditions first (like a sequence - all must succeed)
-	for i := range c.Conditions {
-		conditionStatus := c.Conditions[i].Tick()
+	for _, condition := range c.Conditions {
+		conditionStatus := condition.Tick()
 		switch conditionStatus {
 		case Success:
 			// This condition succeeded, continue to next condition
@@ -287,7 +279,7 @@ func (s *Selector) Tick() Status {
 		status := child.Tick()
 		switch status {
 		case Failure:
-			// continue to next child
+			continue
 		case Ready, Running, Success:
 			s.status = status
 			return s.status
