@@ -1349,7 +1349,7 @@ func main() {
 }
 ```
 
-## Example: Using Struct Methods as Actions
+## Example Using Struct Methods as Actions
 
 You can use methods of your own struct as actions in a behavior tree. This allows you to encapsulate state and logic in a reusable way:
 
