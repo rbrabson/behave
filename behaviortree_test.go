@@ -1,11 +1,60 @@
 package behave
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
 )
+
+// Example demonstrating a struct with multiple methods implementing Run(), used as behavior tree nodes
+type ExampleActor struct {
+	state int
+}
+
+// Method 1: Always succeeds
+func (a *ExampleActor) Succeed() Status {
+	a.state++
+	return Success
+}
+
+// Method 2: Always fails
+func (a *ExampleActor) Fail() Status {
+	a.state--
+	return Failure
+}
+
+// Method 3: Succeeds if state is even, fails otherwise
+func (a *ExampleActor) SucceedIfEven() Status {
+	if a.state%2 == 0 {
+		return Success
+	}
+	return Failure
+}
+
+func Example_structMethodsAsNodes() {
+	actor := &ExampleActor{state: 0}
+
+	// Create Actions using the methods
+	succeedNode := &Action{Run: actor.Succeed}
+	failNode := &Action{Run: actor.Fail}
+	evenNode := &Action{Run: actor.SucceedIfEven}
+
+	// Sequence: succeed, fail, even
+	seq := &Sequence{Children: []Node{succeedNode, failNode, evenNode}}
+	status := seq.Tick()
+	fmt.Println("Sequence status:", status)
+
+	// Selector: even, succeed
+	sel := &Selector{Children: []Node{evenNode, succeedNode}}
+	status2 := sel.Tick()
+	fmt.Println("Selector status:", status2)
+
+	// Output:
+	// Sequence status: Failure
+	// Selector status: Success
+}
 
 func TestWithTimeout_Tick(t *testing.T) {
 	// Action that always returns Success
