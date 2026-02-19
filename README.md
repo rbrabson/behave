@@ -1349,6 +1349,69 @@ func main() {
 }
 ```
 
+## Example: Using Struct Methods as Actions
+
+You can use methods of your own struct as actions in a behavior tree. This allows you to encapsulate state and logic in a reusable way:
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/rbrabson/behave"
+)
+
+type ExampleActor struct {
+    state int
+}
+
+// Always succeeds
+func (a *ExampleActor) Succeed() behave.Status {
+    a.state++
+    return behave.Success
+}
+
+// Always fails
+func (a *ExampleActor) Fail() behave.Status {
+    a.state--
+    return behave.Failure
+}
+
+// Succeeds if state is even, fails otherwise
+func (a *ExampleActor) SucceedIfEven() behave.Status {
+    if a.state%2 == 0 {
+        return behave.Success
+    }
+    return behave.Failure
+}
+
+func main() {
+    actor := &ExampleActor{state: 0}
+
+    // Create Actions using the methods
+    succeedNode := &behave.Action{Run: actor.Succeed}
+    failNode := &behave.Action{Run: actor.Fail}
+    evenNode := &behave.Action{Run: actor.SucceedIfEven}
+
+    // Sequence: succeed, fail, even
+    seq := &behave.Sequence{Children: []behave.Node{succeedNode, failNode, evenNode}}
+    status := seq.Tick()
+    fmt.Println("Sequence status:", status)
+
+    // Selector: even, succeed
+    sel := &behave.Selector{Children: []behave.Node{evenNode, succeedNode}}
+    status2 := sel.Tick()
+    fmt.Println("Selector status:", status2)
+}
+```
+
+Output:
+
+``` bash
+Sequence status: Failure
+Selector status: Success
+```
+
 ## Tree Structure Example
 
 You can compose trees using different node types:
