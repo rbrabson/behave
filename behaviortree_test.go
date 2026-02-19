@@ -1485,14 +1485,14 @@ func TestAlwaysSuccess_Tick(t *testing.T) {
 			expectedStatus: Success,
 		},
 		{
-			name:           "child running, still return success",
-			child:          &Action{Run: func() Status { return Running }},
-			expectedStatus: Success,
+			name:           "child ready, still the child's status",
+			child:          &Action{Run: func() Status { return Ready }},
+			expectedStatus: Ready,
 		},
 		{
-			name:           "child ready, still return success",
-			child:          &Action{Run: func() Status { return Ready }},
-			expectedStatus: Success,
+			name:           "child running, return child's status",
+			child:          &Action{Run: func() Status { return Running }},
+			expectedStatus: Running,
 		},
 	}
 
@@ -1646,14 +1646,14 @@ func TestAlwaysFailure_Tick(t *testing.T) {
 			expectedStatus: Failure,
 		},
 		{
-			name:           "child running, still return failure",
-			child:          &Action{Run: func() Status { return Running }},
-			expectedStatus: Failure,
+			name:           "child ready, return the child's status",
+			child:          &Action{Run: func() Status { return Ready }},
+			expectedStatus: Ready,
 		},
 		{
-			name:           "child ready, still return failure",
-			child:          &Action{Run: func() Status { return Ready }},
-			expectedStatus: Failure,
+			name:           "child running, return the child's status",
+			child:          &Action{Run: func() Status { return Running }},
+			expectedStatus: Running,
 		},
 	}
 

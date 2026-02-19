@@ -51,8 +51,8 @@ type Node interface {
 - **WhileSuccess**: Repeatedly runs its child as long as it returns Success or Running. Returns Running while the child succeeds (resetting it for the next iteration) or is running, and returns Failure when the child fails. Useful for creating loops that continue until failure.
 - **WhileFailure**: Repeatedly runs its child as long as it returns Failure or Running. Returns Running while the child fails (resetting it for retry) or is running, and returns Success when the child succeeds. Useful for retry loops that continue until success.
 - **Invert**: Inverts the result of its child. Changes Success to Failure and Failure to Success. Running and Ready states pass through unchanged.
-- **AlwaysSuccess**: Always returns Success regardless of its child's result. Useful for ensuring a branch always succeeds.
-- **AlwaysFailure**: Always returns Failure regardless of its child's result. Useful for ensuring a branch always fails.
+- **AlwaysSuccess**: Always returns Success regardless of whether the child succeeds or fails. Useful for ensuring a branch always succeeds.
+- **AlwaysFailure**: Always returns Failure regardless of whether the child succeeds or fails. Useful for ensuring a branch always fails.
 - **Log**: Executes its child and logs the result using structured logging (slog). Returns the child's status unchanged. Supports custom log levels or uses defaults (Info for Success, Warn for Failure, Debug for Running/Ready). Useful for debugging and monitoring.
 
 - **WithTimeout**: Runs its child node for at most the specified duration (using Go's `time.Duration`). If the child completes (returns Success or Failure) before the duration expires, WithTimeout returns that status immediately. If the duration expires while the child is still running (status == Ready or Running), WithTimeout returns Failure. Useful for time-limited behaviors, polling, or enforcing timeouts.
