@@ -1407,7 +1407,7 @@ func main() {
 
 Output:
 
-``` bash
+```bash
 Sequence status: Failure
 Selector status: Success
 ```
