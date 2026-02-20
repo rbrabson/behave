@@ -666,14 +666,14 @@ func (i *Invert) String() string {
 	return builder.String()
 }
 
-// AlwaysSuccess represents a decorator node that always returns Success regardless of its child's result.
+// AlwaysSuccess represents a decorator node that always returns Success even if the child fails.
 // This is useful for ensuring certain branches always appear successful to their parent nodes.
 type AlwaysSuccess struct {
 	Child  Node
 	status Status
 }
 
-// Tick executes the AlwaysSuccess node, running its child but always returning Success.
+// Tick executes the AlwaysSuccess node, running its child but returning Success even if the child fails.
 func (as *AlwaysSuccess) Tick() Status {
 	if as.Child == nil {
 		as.status = Success
@@ -722,14 +722,14 @@ func (as *AlwaysSuccess) String() string {
 	return builder.String()
 }
 
-// AlwaysFailure represents a decorator node that always returns Failure regardless of its child's result.
+// AlwaysFailure represents a decorator node that always returns Failure even if the child succeeds.
 // This is useful for testing or ensuring certain branches always appear failed to their parent nodes.
 type AlwaysFailure struct {
 	Child  Node
 	status Status
 }
 
-// Tick executes the AlwaysFailure node, running its child but always returning Failure.
+// Tick executes the AlwaysFailure node, running its child but returning Failure even if the child succeeds.
 func (af *AlwaysFailure) Tick() Status {
 	if af.Child == nil {
 		af.status = Failure
