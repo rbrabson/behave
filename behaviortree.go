@@ -683,10 +683,11 @@ func (as *AlwaysSuccess) Tick() Status {
 	// Execute the child but ignore its result
 	as.status = as.Child.Tick()
 
-	// Return Success regardless of child's result
+	// Return Success even if the child failed
 	if as.status == Failure {
 		as.status = Success
 	}
+
 	return as.status
 }
 
@@ -738,10 +739,11 @@ func (af *AlwaysFailure) Tick() Status {
 	// Execute the child but ignore its result
 	af.status = af.Child.Tick()
 
-	// Always return Failure regardless of child's result
+	// Return Failure even if the child succeeded
 	if af.status == Success {
 		af.status = Failure
 	}
+
 	return af.status
 }
 
