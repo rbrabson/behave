@@ -1,3 +1,14 @@
+// Package behave provides a flexible and extensible framework for building and executing behavior trees in Go.
+//
+// Behavior trees are used to model complex decision-making processes, commonly in robotics, games, and AI systems.
+// This package supports composite, decorator, and leaf nodes, allowing users to construct trees for a variety of use cases.
+//
+// Example usage:
+//
+//	tree := behave.New(rootNode)
+//	status := tree.Tick()
+//
+// See the documentation for details on node types and tree construction.
 package behave
 
 import (
