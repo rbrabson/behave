@@ -50,11 +50,20 @@ type BehaviorTree struct {
 }
 
 // New creates a new BehaviorTree with the given root node.
+//
+// Parameters:
+//   - root: The root node of the behavior tree. This can be any node that implements the Node interface.
+//
+// Returns:
+//   - A pointer to a new BehaviorTree instance initialized with the provided root node and a status of Ready.
 func New(root Node) *BehaviorTree {
 	return &BehaviorTree{Root: root, status: Ready}
 }
 
 // Tick executes the behavior tree.
+//
+// Returns:
+//   - The current status of the behavior tree after execution.
 func (bt *BehaviorTree) Tick() Status {
 	if bt.Root == nil {
 		bt.status = Failure
@@ -65,6 +74,9 @@ func (bt *BehaviorTree) Tick() Status {
 }
 
 // Reset resets the behavior tree to its initial state.
+//
+// Returns:
+//   - A pointer to the BehaviorTree instance after resetting, allowing for method chaining.
 func (bt *BehaviorTree) Reset() *BehaviorTree {
 	if bt.Root != nil {
 		bt.Root.Reset()
@@ -74,11 +86,17 @@ func (bt *BehaviorTree) Reset() *BehaviorTree {
 }
 
 // Status returns the current status of the behavior tree.
+//
+// Returns:
+//   - The current status of the behavior tree, which can be Ready, Running, Success, or Failure.
 func (bt *BehaviorTree) Status() Status {
 	return bt.status
 }
 
 // String returns a string representation of the behavior tree.
+//
+// Returns:
+//   - A string that represents the structure and current status of the behavior tree, including its root node and all child nodes.
 func (bt *BehaviorTree) String() string {
 	var builder strings.Builder
 	builder.WriteString("BehaviorTree (" + bt.Status().String() + ")")
@@ -99,6 +117,10 @@ type Action struct {
 }
 
 // Tick executes the action's Run function and handles all status values.
+//
+// Returns:
+//   - The current status of the Action node after execution, which can be Ready, Running, Success, or Failure.
+//     If the Run function is nil or returns an invalid status, it defaults to Failure.
 func (a *Action) Tick() Status {
 	if a.Run == nil {
 		a.status = Failure
@@ -116,17 +138,26 @@ func (a *Action) Tick() Status {
 }
 
 // Reset resets the Action node to its initial state.
+//
+// Returns:
+//   - The status of the Action node after reset, which will be Ready.
 func (a *Action) Reset() Status {
 	a.status = Ready
 	return a.status
 }
 
 // Status returns the current status of the Action node.
+//
+// Returns:
+//   - The current status of the Action node, which can be Ready, Running, Success, or Failure.
 func (a *Action) Status() Status {
 	return a.status
 }
 
 // String returns a string representation of the Action node.
+//
+// Returns:
+//   - A string that represents the Action node, including its current status. The format is "Action (Status)".
 func (a *Action) String() string {
 	var builder strings.Builder
 	builder.WriteString("Action (" + a.Status().String() + ")")
@@ -139,16 +170,27 @@ type Condition struct {
 }
 
 // Tick executes the condition's Check function.
+//
+// Returns:
+//   - Success if the Check function returns true, Failure if it returns false or is nil.
 func (c *Condition) Tick() Status {
 	return c.Status()
 }
 
 // Reset resets the Condition node to its initial state.
+//
+// Returns:
+//   - The status of the Condition node after reset, which will be Ready. However, since Condition nodes are stateless,
+//     this method simply returns Ready without changing any internal state.
 func (c *Condition) Reset() Status {
 	return Ready
 }
 
 // Status returns the current status of the Condition node.
+//
+// Returns:
+//   - Success if the Check function returns true, Failure if it returns false or is nil. Since Condition nodes are stateless,
+//     this method directly evaluates the Check function each time it's called.
 func (c *Condition) Status() Status {
 	if c.Check == nil {
 		return Failure
@@ -160,6 +202,9 @@ func (c *Condition) Status() Status {
 }
 
 // String returns a string representation of the Condition node.
+//
+// Returns:
+//   - A string that represents the Condition node, including its current status. The format is "Condition (Status)".
 func (c *Condition) String() string {
 	var builder strings.Builder
 	builder.WriteString("Condition (" + c.Status().String() + ")")
@@ -175,6 +220,9 @@ type Composite struct {
 }
 
 // Tick executes the composite by first checking all conditions, then running the child node if all conditions succeed.
+//
+// Returns:
+//   - The current status of the Composite node after execution, which can be Ready, Running, Success, or Failure.
 func (c *Composite) Tick() Status {
 	if len(c.Conditions) == 0 && c.Child == nil {
 		c.status = Failure
@@ -222,6 +270,10 @@ func (c *Composite) Tick() Status {
 }
 
 // Reset resets the Composite node and its conditions and child node to their initial state.
+//
+// Returns:
+//   - The status of the Composite node after reset, which will be Ready. This method resets all conditions
+//     and the child node (if they exist) to their initial state.
 func (c *Composite) Reset() Status {
 	for i := range c.Conditions {
 		c.Conditions[i].Reset()
@@ -234,11 +286,19 @@ func (c *Composite) Reset() Status {
 }
 
 // Status returns the current status of the Composite node.
+//
+// Returns:
+//   - The current status of the Composite node, which can be Ready, Running, Success, or Failure.
+//     This status reflects the result of the last Tick execution, which depends on the conditions and child node.
 func (c *Composite) Status() Status {
 	return c.status
 }
 
 // String returns a string representation of the Composite node.
+//
+// Returns:
+//   - A string that represents the Composite node, including its current status, all conditions, and the child node (if it exists)
+//     The format is: Composite (Status)
 func (c *Composite) String() string {
 	var builder strings.Builder
 	builder.WriteString("Composite (" + c.Status().String() + ")")
@@ -265,6 +325,9 @@ type Selector struct {
 }
 
 // Reset resets the Selector node and all its children to their initial state.
+//
+// Returns:
+//   - The status of the Selector node after reset, which will be Ready. This method resets all child nodes to their initial state.
 func (s *Selector) Reset() Status {
 	for _, child := range s.Children {
 		child.Reset()
@@ -274,6 +337,11 @@ func (s *Selector) Reset() Status {
 }
 
 // Tick executes the selector and handles all status values.
+//
+// Returns:
+//   - The status of the Selector node after execution, which can be Ready, Running, Success, or Failure.
+//     The Selector returns Success if at least one child returns Success, Running if at least one child is
+//     Running and none have succeeded, and Failure if all children have failed or are not ready.
 func (s *Selector) Tick() Status {
 	for _, child := range s.Children {
 		status := child.Tick()
@@ -293,6 +361,9 @@ func (s *Selector) Tick() Status {
 }
 
 // Status returns the current status of the Selector node.
+//
+// Returns:
+//   - The current status of the Selector node, which can be Ready, Running, Success, or Failure.
 func (s *Selector) Status() Status {
 	return s.status
 }
@@ -320,6 +391,10 @@ type Sequence struct {
 }
 
 // Reset resets the Sequence node and all its children to their initial state.
+//
+// Returns:
+//   - The status of the Sequence node after reset, which will be Ready. This method resets all
+//     child nodes to their initial state.
 func (s *Sequence) Reset() Status {
 	for _, child := range s.Children {
 		child.Reset()
@@ -329,6 +404,9 @@ func (s *Sequence) Reset() Status {
 }
 
 // Tick runs the sequence and handles all status values.
+//
+// Returns:
+//   - The status of the Sequence node after execution, which can be Ready, Running, Success, or Failure.
 func (s *Sequence) Tick() Status {
 	for _, child := range s.Children {
 		status := child.Tick()
@@ -348,11 +426,18 @@ func (s *Sequence) Tick() Status {
 }
 
 // Status returns the current status of the Sequence node.
+//
+// Returns:
+//   - The current status of the Sequence node, which can be Ready, Running, Success, or Failure.
 func (s *Sequence) Status() Status {
 	return s.status
 }
 
 // String returns a string representation of the Sequence node.
+//
+// Returns:
+//   - A string that represents the Sequence node, including its current status and all child nodes.
+//     The format is: Sequence (Status)
 func (s *Sequence) String() string {
 	var builder strings.Builder
 	builder.WriteString("Sequence (" + s.Status().String() + ")")
@@ -376,6 +461,10 @@ type Parallel struct {
 }
 
 // Reset resets the Parallel node and all its children to their initial state.
+//
+// Returns:
+//   - The status of the Parallel node after reset, which will be Ready. This method resets all child nodes
+//     to their initial state.
 func (p *Parallel) Reset() Status {
 	for _, child := range p.Children {
 		child.Reset()
@@ -385,6 +474,9 @@ func (p *Parallel) Reset() Status {
 }
 
 // Tick runs all children in parallel and evaluates based on MinSuccessCount.
+//
+// Returns:
+//   - The status of the Parallel node after execution, which can be Ready, Running, Success, or Failure.
 func (p *Parallel) Tick() Status {
 	if len(p.Children) == 0 {
 		p.status = Success
@@ -444,11 +536,19 @@ func (p *Parallel) Tick() Status {
 }
 
 // Status returns the current status of the Parallel node.
+//
+// Returns:
+//   - The current status of the Parallel node, which can be Ready, Running, Success, or Failure.
+//     This status reflects the result of the last Tick execution, which depends on the number of successful,
+//     failed, and running children
 func (p *Parallel) Status() Status {
 	return p.status
 }
 
 // String returns a string representation of the Parallel node.
+//
+// Returns:
+//   - A string that represents the Parallel node, including its current status, MinSuccessCount, and all child nodes.
 func (p *Parallel) String() string {
 	var builder strings.Builder
 	builder.WriteString("Parallel (")
@@ -477,6 +577,9 @@ type Retry struct {
 }
 
 // Tick executes the Retry node, running its child until it succeeds.
+//
+// Returns:
+//   - The status of the Retry node after execution, which can be Ready, Running, Success, or Failure.
 func (r *Retry) Tick() Status {
 	if r.Child == nil {
 		r.status = Failure
@@ -503,6 +606,10 @@ func (r *Retry) Tick() Status {
 }
 
 // Reset resets the Retry node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the Retry node after reset, which will be Ready. This method resets the child node
+//     to its initial state.
 func (r *Retry) Reset() Status {
 	r.status = Ready
 	if r.Child != nil {
@@ -512,11 +619,17 @@ func (r *Retry) Reset() Status {
 }
 
 // Status returns the current status of the Retry node.
+//
+// Returns:
+//   - The current status of the Retry node, which can be Ready, Running, Success, or Failure.
 func (r *Retry) Status() Status {
 	return r.status
 }
 
 // String returns a string representation of the Retry node.
+//
+// Returns:
+//   - A string that represents the Retry node, including its current status and the child node (if it exists).
 func (r *Retry) String() string {
 	var builder strings.Builder
 	builder.WriteString("Retry (")
@@ -543,6 +656,9 @@ type Repeat struct {
 }
 
 // Tick executes the Repeat node, running its child repeatedly until it fails.
+//
+// Returns:
+//   - The status of the Repeat node after execution, which can be Ready, Running, Success, or Failure.
 func (rp *Repeat) Tick() Status {
 	if rp.Child == nil {
 		rp.status = Failure
@@ -570,6 +686,10 @@ func (rp *Repeat) Tick() Status {
 }
 
 // Reset resets the Repeat node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the Repeat node after reset, which will be Ready. This method resets the child node
+//     to its initial state.
 func (rp *Repeat) Reset() Status {
 	rp.status = Ready
 	if rp.Child != nil {
@@ -579,11 +699,17 @@ func (rp *Repeat) Reset() Status {
 }
 
 // Status returns the current status of the Repeat node.
+//
+// Returns:
+//   - The current status of the Repeat node, which can be Ready, Running, Success, or Failure.
 func (rp *Repeat) Status() Status {
 	return rp.status
 }
 
 // String returns a string representation of the Repeat node.
+//
+// Returns:
+//   - A string that represents the Repeat node, including its current status and the child node (if it exists).
 func (rp *Repeat) String() string {
 	var builder strings.Builder
 	builder.WriteString("Repeat (")
@@ -609,6 +735,9 @@ type Invert struct {
 }
 
 // Tick executes the Invert node, running its child and inverting Success/Failure results.
+//
+// Returns:
+//   - The status of the Invert node after execution, which can be Ready, Running, Success, or Failure.
 func (i *Invert) Tick() Status {
 	if i.Child == nil {
 		i.status = Failure
@@ -636,6 +765,10 @@ func (i *Invert) Tick() Status {
 }
 
 // Reset resets the Invert node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the Invert node after reset, which will be Ready. This method resets the child node
+//     to its initial state.
 func (i *Invert) Reset() Status {
 	i.status = Ready
 	if i.Child != nil {
@@ -645,11 +778,17 @@ func (i *Invert) Reset() Status {
 }
 
 // Status returns the current status of the Invert node.
+//
+// Returns:
+//   - The current status of the Invert node, which can be Ready, Running, Success, or Failure.
 func (i *Invert) Status() Status {
 	return i.status
 }
 
 // String returns a string representation of the Invert node.
+//
+// Returns:
+//   - A string that represents the Invert node, including its current status and the child node (if it exists).
 func (i *Invert) String() string {
 	var builder strings.Builder
 	builder.WriteString("Invert (")
@@ -674,6 +813,9 @@ type AlwaysSuccess struct {
 }
 
 // Tick executes the AlwaysSuccess node, running its child but returning Success even if the child fails.
+//
+// Returns:
+//   - The status of the AlwaysSuccess node after execution, which can be Ready, Running, Success, or Failure.
 func (as *AlwaysSuccess) Tick() Status {
 	if as.Child == nil {
 		as.status = Success
@@ -692,6 +834,10 @@ func (as *AlwaysSuccess) Tick() Status {
 }
 
 // Reset resets the AlwaysSuccess node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the AlwaysSuccess node after reset, which will be Ready. This method resets the child node
+//     to its initial state.
 func (as *AlwaysSuccess) Reset() Status {
 	as.status = Ready
 	if as.Child != nil {
@@ -701,11 +847,19 @@ func (as *AlwaysSuccess) Reset() Status {
 }
 
 // Status returns the current status of the AlwaysSuccess node.
+//
+// Returns:
+//   - The current status of the AlwaysSuccess node, which can be Ready, Running, Success, or Failure.
+//     This status reflects the result of the last Tick execution, which depends on the child node's status but will
+//     always return Success if the child failed.
 func (as *AlwaysSuccess) Status() Status {
 	return as.status
 }
 
 // String returns a string representation of the AlwaysSuccess node.
+//
+// Returns:
+//   - A string that represents the AlwaysSuccess node, including its current status and the child node (if it exists).
 func (as *AlwaysSuccess) String() string {
 	var builder strings.Builder
 	builder.WriteString("AlwaysSuccess (")
@@ -730,6 +884,9 @@ type AlwaysFailure struct {
 }
 
 // Tick executes the AlwaysFailure node, running its child but returning Failure even if the child succeeds.
+//
+// Returns:
+//   - The status of the AlwaysFailure node after execution, which can be Ready, Running, Success, or Failure.
 func (af *AlwaysFailure) Tick() Status {
 	if af.Child == nil {
 		af.status = Failure
@@ -748,6 +905,10 @@ func (af *AlwaysFailure) Tick() Status {
 }
 
 // Reset resets the AlwaysFailure node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the AlwaysFailure node after reset, which will be Ready. This method resets the child node
+//     to its initial state.
 func (af *AlwaysFailure) Reset() Status {
 	af.status = Ready
 	if af.Child != nil {
@@ -757,11 +918,19 @@ func (af *AlwaysFailure) Reset() Status {
 }
 
 // Status returns the current status of the AlwaysFailure node.
+//
+// Returns:
+//   - The current status of the AlwaysFailure node, which can be Ready, Running, Success, or Failure.
+//     This status reflects the result of the last Tick execution, which depends on the child node's status but will
+//     always return Failure if the child succeeded.
 func (af *AlwaysFailure) Status() Status {
 	return af.status
 }
 
 // String returns a string representation of the AlwaysFailure node.
+//
+// Returns:
+//   - A string that represents the AlwaysFailure node, including its current status and the child node (if it exists).
 func (af *AlwaysFailure) String() string {
 	var builder strings.Builder
 	builder.WriteString("AlwaysFailure (")
@@ -788,6 +957,10 @@ type RepeatN struct {
 }
 
 // Tick executes the RepeatN node, running its child up to MaxCount times.
+//
+// Returns:
+//   - The status of the RepeatN node after execution, which can be Ready, Running, Success, or Failure.
+//     The node returns Running while the execution count is below MaxCount, and returns the child's last result once MaxCount is reached.
 func (rn *RepeatN) Tick() Status {
 	if rn.Child == nil {
 		rn.status = Failure
@@ -826,6 +999,10 @@ func (rn *RepeatN) Tick() Status {
 }
 
 // Reset resets the RepeatN node and its child to the Ready state, and resets the execution count.
+//
+// Returns:
+//   - The status of the RepeatN node after reset, which will be Ready. This method resets the child node
+//     to its initial state and resets the execution count to zero.
 func (rn *RepeatN) Reset() Status {
 	rn.status = Ready
 	rn.Count = 0
@@ -836,11 +1013,18 @@ func (rn *RepeatN) Reset() Status {
 }
 
 // Status returns the current status of the RepeatN node.
+//
+// Returns:
+//   - The current status of the RepeatN node, which can be Ready, Running, Success, or Failure.
 func (rn *RepeatN) Status() Status {
 	return rn.status
 }
 
 // String returns a string representation of the RepeatN node.
+//
+// Returns:
+//   - A string that represents the RepeatN node, including its current status, execution count, maximum count,
+//     and the child node (if it exists).
 func (rn *RepeatN) String() string {
 	var builder strings.Builder
 	builder.WriteString("RepeatN (")
@@ -868,6 +1052,10 @@ type Forever struct {
 }
 
 // Tick executes the Forever node, always returning Running regardless of the child's status.
+//
+// Returns:
+//   - The status of the Forever node after execution, which will always be Running. This node ignores
+//     the child's status and continues running indefinitely.
 func (f *Forever) Tick() Status {
 	if f.Child != nil {
 		f.Child.Tick()
@@ -877,6 +1065,10 @@ func (f *Forever) Tick() Status {
 }
 
 // Reset resets the Forever node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the Forever node after reset, which will be Ready. This method resets the child node
+//     to its initial state.
 func (f *Forever) Reset() Status {
 	f.status = Ready
 	if f.Child != nil {
@@ -886,11 +1078,18 @@ func (f *Forever) Reset() Status {
 }
 
 // Status returns the current status of the Forever node.
+//
+// Returns:
+//   - The current status of the Forever node, which will always be Running after Tick is called,
+//     and Ready after Reset is called.
 func (f *Forever) Status() Status {
 	return f.status
 }
 
 // String returns a string representation of the Forever node.
+//
+// Returns:
+//   - A string that represents the Forever node, including its current status and the child node (if it exists).
 func (f *Forever) String() string {
 	var builder strings.Builder
 	builder.WriteString("Forever (")
@@ -916,6 +1115,10 @@ type WhileSuccess struct {
 }
 
 // Tick executes the WhileSuccess node, running its child and continuing while it succeeds or runs.
+//
+// Returns:
+//   - The status of the WhileSuccess node after execution, which can be Ready, Running, Success, or Failure.
+//     The node returns Running while the child is Running or Success, and returns Failure if the child fails or is not ready.
 func (ws *WhileSuccess) Tick() Status {
 	if ws.Child == nil {
 		ws.status = Failure
@@ -941,6 +1144,10 @@ func (ws *WhileSuccess) Tick() Status {
 }
 
 // Reset resets the WhileSuccess node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the WhileSuccess node after reset, which will be Ready. This method resets the child node
+//     to its initial state.
 func (ws *WhileSuccess) Reset() Status {
 	ws.status = Ready
 	if ws.Child != nil {
@@ -950,11 +1157,19 @@ func (ws *WhileSuccess) Reset() Status {
 }
 
 // Status returns the current status of the WhileSuccess node.
+//
+// Returns:
+//   - The current status of the WhileSuccess node, which can be Ready, Running, Success, or Failure.
+//     This status reflects the result of the last Tick execution, which depends on the child node's status.
+//     The node returns Running while the child is Running or Success, and returns Failure if the child fails or is not ready.
 func (ws *WhileSuccess) Status() Status {
 	return ws.status
 }
 
 // String returns a string representation of the WhileSuccess node.
+//
+// Returns:
+//   - A string that represents the WhileSuccess node, including its current status and the child node (if it exists).
 func (ws *WhileSuccess) String() string {
 	var builder strings.Builder
 	builder.WriteString("WhileSuccess (")
@@ -980,6 +1195,10 @@ type WhileFailure struct {
 }
 
 // Tick executes the WhileFailure node, running its child and continuing while it fails or runs.
+//
+// Returns:
+//   - The status of the WhileFailure node after execution, which can be Ready, Running, Success, or Failure.
+//     The node returns Running while the child is Running or Failure, and returns Success if the child succeeds.
 func (wf *WhileFailure) Tick() Status {
 	if wf.Child == nil {
 		wf.status = Success // No child means we're done (child "succeeded")
@@ -1009,6 +1228,10 @@ func (wf *WhileFailure) Tick() Status {
 }
 
 // Reset resets the WhileFailure node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the WhileFailure node after reset, which will be Ready. This method resets the child node
+//     to its initial state.
 func (wf *WhileFailure) Reset() Status {
 	wf.status = Ready
 	if wf.Child != nil {
@@ -1018,11 +1241,19 @@ func (wf *WhileFailure) Reset() Status {
 }
 
 // Status returns the current status of the WhileFailure node.
+//
+// Returns:
+//   - The current status of the WhileFailure node, which can be Ready, Running, Success, or Failure.
+//     This status reflects the result of the last Tick execution, which depends on the child node's status.
+//     The node returns Running while the child is Running or Failure, and returns Success if the child succeeds.
 func (wf *WhileFailure) Status() Status {
 	return wf.status
 }
 
 // String returns a string representation of the WhileFailure node.
+//
+// Returns:
+//   - A string that represents the WhileFailure node, including its current status and the child node (if it exists).
 func (wf *WhileFailure) String() string {
 	var builder strings.Builder
 	builder.WriteString("WhileFailure (")
@@ -1050,6 +1281,12 @@ type WithTimeout struct {
 	status    Status
 }
 
+// Tick executes the WithTimeout node, running its child and enforcing the timeout.
+//
+// Returns:
+//   - The status of the WithTimeout node after execution, which can be Ready, Running, Success, or Failure.
+//     The node returns Success or Failure if the child returns those statuses before the timeout expires,
+//     and returns Failure if the timeout expires while the child is still Running.
 func (wt *WithTimeout) Tick() Status {
 	if wt.Child == nil {
 		wt.status = Failure
@@ -1081,6 +1318,10 @@ func (wt *WithTimeout) Tick() Status {
 }
 
 // Reset resets the WithTimeout node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the WithTimeout node after reset, which will be Ready. This method resets the child node
+//     to its initial state and resets the timer.
 func (wt *WithTimeout) Reset() Status {
 	wt.status = Ready
 	wt.startTime = time.Time{}
@@ -1091,11 +1332,19 @@ func (wt *WithTimeout) Reset() Status {
 }
 
 // Status returns the current status of the WithTimeout node.
+//
+// Returns:
+//   - The current status of the WithTimeout node, which can be Ready, Running, Success, or Failure.
+//     This status reflects the result of the last Tick execution, which depends on the child node's status
+//     and whether the timeout has expired.
 func (wt *WithTimeout) Status() Status {
 	return wt.status
 }
 
 // String returns a string representation of the WithTimeout node.
+//
+// Returns:
+//   - A string that represents the WithTimeout node, including its current status, timeout duration, and the child node (if it exists).
 func (wt *WithTimeout) String() string {
 	var builder strings.Builder
 	builder.WriteString("WithTimeout (")
@@ -1124,6 +1373,10 @@ type Log struct {
 }
 
 // Tick executes the Log node, running its child and logging the result.
+//
+// Returns:
+//   - The status of the Log node after execution, which can be Ready, Running, Success, or Failure.
+//     The node logs the result of the child execution with the specified message and log level (or defaults based on child status).
 func (l *Log) Tick() Status {
 	if l.Child == nil {
 		l.status = Failure
@@ -1173,7 +1426,10 @@ func (l *Log) Tick() Status {
 	return l.status
 }
 
-// getChildType returns a string representation of the child node type for logging
+// getChildType returns a string representation of the child node type for logging.
+//
+// Returns:
+//   - A string representing the type of the child node, or "nil" if there is no child.
 func (l *Log) getChildType() string {
 	if l.Child == nil {
 		return "nil"
@@ -1184,6 +1440,10 @@ func (l *Log) getChildType() string {
 }
 
 // Reset resets the Log node and its child to the Ready state.
+//
+// Returns:
+//   - The status of the Log node after reset, which will be Ready. This method resets the child node
+//     to its initial state and logs the reset action.
 func (l *Log) Reset() Status {
 	l.status = Ready
 	if l.Child != nil {
@@ -1201,11 +1461,19 @@ func (l *Log) Reset() Status {
 }
 
 // Status returns the current status of the Log node.
+//
+// Returns:
+//   - The current status of the Log node, which can be Ready, Running, Success, or Failure.
+//     This status reflects the result of the last Tick execution, which depends on the child
+//     node's status and is logged accordingly.
 func (l *Log) Status() Status {
 	return l.status
 }
 
 // String returns a string representation of the Log node.
+//
+// Returns:
+//   - A string that represents the Log node, including its current status, message, log level, and the child node (if it exists).
 func (l *Log) String() string {
 	var builder strings.Builder
 	builder.WriteString("Log (")
