@@ -330,43 +330,59 @@ func (c *Composite) String() string {
 
 // Selector is a Node that runs its children in order and succeeds if at least one child succeeds.
 // The Selector composite type can be seen as an OR operator with their children.
+// It tracks the last non-successful node and only runs nodes that haven't previously completed successfully.
 type Selector struct {
-	Children []Node
-	status   Status
+	Children            []Node
+	status              Status
+	lastNonSuccessIndex int // Track the index of the last non-successful node
 }
 
 // Reset resets the Selector node and all its children to their initial state.
 //
 // Returns:
-//   - The status of the Selector node after reset, which will be Ready. This method resets all child nodes to their initial state.
+//   - The status of the Selector node after reset, which will be Ready. This method resets all child nodes to their initial state
+//     and resets the tracking of successful nodes.
 func (s *Selector) Reset() Status {
 	for _, child := range s.Children {
 		child.Reset()
 	}
 	s.status = Ready
+	s.lastNonSuccessIndex = 0
 	return s.status
 }
 
 // Tick executes the selector and handles all status values.
+// It keeps track of the last non-successful node and only runs nodes that haven't previously completed successfully.
 //
 // Returns:
 //   - The status of the Selector node after execution, which can be Ready, Running, Success, or Failure.
 //     The Selector returns Success if at least one child returns Success, Running if at least one child is
 //     Running and none have succeeded, and Failure if all children have failed or are not ready.
 func (s *Selector) Tick() Status {
-	for _, child := range s.Children {
+	// Start from the last non-successful node index
+	for i := s.lastNonSuccessIndex; i < len(s.Children); i++ {
+		child := s.Children[i]
 		status := child.Tick()
 		switch status {
 		case Failure:
+			// This child failed, move to next child on next tick
+			s.lastNonSuccessIndex = i + 1
 			continue
-		case Ready, Running, Success:
+		case Ready, Running:
+			// This child is still running or ready, report this status
 			s.status = status
+			return s.status
+		case Success:
+			// This child succeeded, move to next child on next tick
+			s.lastNonSuccessIndex = i + 1
+			s.status = Success
 			return s.status
 		default:
 			s.status = Failure
 			return s.status
 		}
 	}
+	// All children have been processed (either succeeded or failed)
 	s.status = Failure
 	return s.status
 }
