@@ -1386,8 +1386,10 @@ func (wt *WithTimeout) String() string {
 // It's useful for debugging and monitoring behavior tree execution.
 type Log struct {
 	Child    Node
-	Message  string      // Optional custom message for logging
-	LogLevel *slog.Level // Optional custom log level. If nil, uses default levels based on child status
+	Message  string          // Optional custom message for logging
+	LogLevel *slog.Level     // Optional custom log level. If nil, uses default levels based on child status
+	Logger   *slog.Logger    // Optional custom logger. If nil, uses the default logger
+	Context  context.Context // Optional context for logging
 	status   Status
 }
 
@@ -1397,6 +1399,11 @@ type Log struct {
 //   - The status of the Log node after execution, which can be Ready, Running, Success, or Failure.
 //     The node logs the result of the child execution with the specified message and log level (or defaults based on child status).
 func (l *Log) Tick() Status {
+	logContext := l.Context
+	if logContext == nil {
+		logContext = context.Background()
+	}
+
 	if l.Child == nil {
 		l.status = Failure
 
@@ -1406,7 +1413,11 @@ func (l *Log) Tick() Status {
 			logLevel = *l.LogLevel
 		}
 
-		slog.Log(context.Background(), logLevel, "Log node has no child", "status", l.status.String())
+		if l.Logger != nil {
+			l.Logger.Log(logContext, logLevel, "Log node has no child", "status", l.status.String())
+		} else {
+			slog.Log(logContext, logLevel, "Log node has no child", "status", l.status.String())
+		}
 		return l.status
 	}
 
@@ -1437,7 +1448,7 @@ func (l *Log) Tick() Status {
 	}
 
 	// Log with the determined level
-	slog.Log(context.Background(), logLevel, message,
+	slog.Log(logContext, logLevel, message,
 		"child_status", childStatus.String(),
 		"child_type", l.getChildType(),
 	)
@@ -1469,13 +1480,18 @@ func (l *Log) Reset() Status {
 		l.Child.Reset()
 	}
 
+	logContext := l.Context
+	if logContext == nil {
+		logContext = context.Background()
+	}
+
 	// Log reset with custom level if specified, otherwise use Debug
 	logLevel := slog.LevelDebug
 	if l.LogLevel != nil {
 		logLevel = *l.LogLevel
 	}
 
-	slog.Log(context.Background(), logLevel, "Log node reset", "message", l.Message)
+	slog.Log(logContext, logLevel, "Log node reset", "message", l.Message)
 	return l.status
 }
 
