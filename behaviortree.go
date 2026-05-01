@@ -1300,6 +1300,107 @@ type WithTimeout struct {
 	status    Status
 }
 
+// Timer represents a decorator node that tracks how long its child has been
+// continuously running.
+//
+// The timer starts when the child first returns Running, updates on each
+// subsequent Running tick, and is preserved as the last measured duration after
+// the child exits Running. The timer resets when Reset is called.
+type Timer struct {
+	Child     Node
+	startTime time.Time
+	elapsed   time.Duration
+	status    Status
+}
+
+// Tick executes the Timer node, running its child and tracking Running time.
+//
+// Returns:
+//   - The status of the Timer node after execution, which can be Ready,
+//     Running, Success, or Failure.
+func (tm *Timer) Tick() Status {
+	if tm.Child == nil {
+		tm.status = Failure
+		tm.startTime = time.Time{}
+		tm.elapsed = 0
+		return tm.status
+	}
+
+	childStatus := tm.Child.Tick()
+	tm.status = childStatus
+
+	if childStatus == Running {
+		if tm.startTime.IsZero() {
+			tm.startTime = time.Now()
+		}
+		tm.elapsed = time.Since(tm.startTime)
+		return tm.status
+	}
+
+	if !tm.startTime.IsZero() {
+		tm.elapsed = time.Since(tm.startTime)
+		tm.startTime = time.Time{}
+	}
+
+	return tm.status
+}
+
+// Reset resets the Timer node and its child to the Ready state and clears
+// timing data.
+//
+// Returns:
+//   - The status of the Timer node after reset, which will be Ready.
+func (tm *Timer) Reset() Status {
+	tm.status = Ready
+	tm.startTime = time.Time{}
+	tm.elapsed = 0
+	if tm.Child != nil {
+		tm.Child.Reset()
+	}
+	return tm.status
+}
+
+// Status returns the current status of the Timer node.
+//
+// Returns:
+//   - The current status of the Timer node, which can be Ready, Running,
+//     Success, or Failure.
+func (tm *Timer) Status() Status {
+	return tm.status
+}
+
+// Elapsed returns how long the child has been running in the current or most
+// recent running window.
+func (tm *Timer) Elapsed() time.Duration {
+	if tm.status == Running && !tm.startTime.IsZero() {
+		return time.Since(tm.startTime)
+	}
+	return tm.elapsed
+}
+
+// String returns a string representation of the Timer node.
+//
+// Returns:
+//   - A string that represents the Timer node, including its current status,
+//     tracked running duration, and the child node (if it exists).
+func (tm *Timer) String() string {
+	var builder strings.Builder
+	builder.WriteString("Timer (")
+	builder.WriteString(tm.status.String())
+	builder.WriteString(", Elapsed: ")
+	builder.WriteString(tm.Elapsed().String())
+	builder.WriteString(")")
+	if tm.Child != nil {
+		childStr := tm.Child.String()
+		lines := strings.Split(childStr, "\n")
+		builder.WriteString("\n  " + lines[0])
+		for _, line := range lines[1:] {
+			builder.WriteString("\n  " + line)
+		}
+	}
+	return builder.String()
+}
+
 // Tick executes the WithTimeout node, running its child and enforcing the timeout.
 //
 // Returns:

@@ -56,6 +56,7 @@ type Node interface {
 - **Log**: Executes its child and logs the result using structured logging (slog). Returns the child's status unchanged. Supports custom log levels or uses defaults (Info for Success, Warn for Failure, Debug for Running/Ready). Useful for debugging and monitoring.
 
 - **WithTimeout**: Runs its child node for at most the specified duration (using Go's `time.Duration`). If the child completes (returns Success or Failure) before the duration expires, WithTimeout returns that status immediately. If the duration expires while the child is still running (status == Ready or Running), WithTimeout returns Failure. Useful for time-limited behaviors, polling, or enforcing timeouts.
+- **Timer**: Tracks how long its child has been in the Running state and includes that elapsed time in its string output. Useful for debugging and observability.
 
 ### BehaviorTree
 
@@ -853,6 +854,50 @@ func main() {
     fmt.Printf("Completed after %v and %d ticks!\n", elapsed, ticks)
 }
 ```
+
+    ## Timer Node Example
+
+    The Timer decorator tracks how long its child has been running. This duration is exposed via `Elapsed()` and included in `String()` output.
+
+    ```go
+    package main
+
+    import (
+        "fmt"
+        "time"
+
+        "github.com/rbrabson/behave"
+    )
+
+    func main() {
+        ticks := 0
+        slowAction := &behave.Action{
+            Run: func() behave.Status {
+                ticks++
+                if ticks < 3 {
+                    return behave.Running
+                }
+                return behave.Success
+            },
+        }
+
+        timer := &behave.Timer{Child: slowAction}
+        tree := behave.New(timer)
+
+        for {
+            status := tree.Tick()
+            fmt.Println(timer.String())
+
+            if status == behave.Success || status == behave.Failure {
+                break
+            }
+
+            time.Sleep(100 * time.Millisecond)
+        }
+
+        fmt.Printf("Final elapsed running time: %v\n", timer.Elapsed())
+    }
+    ```
 
 The RepeatN node executes its child a specific number of times, which is useful for controlled repetition:
 

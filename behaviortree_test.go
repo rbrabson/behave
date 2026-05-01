@@ -119,6 +119,104 @@ func TestWithTimeout_Reset(t *testing.T) {
 	}
 }
 
+func TestTimer_TickTracksElapsed(t *testing.T) {
+	tickCount := 0
+	child := &Action{Run: func() Status {
+		tickCount++
+		if tickCount <= 2 {
+			return Running
+		}
+		return Success
+	}}
+
+	timer := &Timer{Child: child}
+
+	if got := timer.Tick(); got != Running {
+		t.Fatalf("Timer.Tick() first call = %v, want %v", got, Running)
+	}
+	time.Sleep(20 * time.Millisecond)
+
+	if got := timer.Tick(); got != Running {
+		t.Fatalf("Timer.Tick() second call = %v, want %v", got, Running)
+	}
+
+	if elapsed := timer.Elapsed(); elapsed <= 0 {
+		t.Fatalf("Timer.Elapsed() = %v, want > 0", elapsed)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	if got := timer.Tick(); got != Success {
+		t.Fatalf("Timer.Tick() third call = %v, want %v", got, Success)
+	}
+
+	if elapsed := timer.Elapsed(); elapsed <= 0 {
+		t.Fatalf("Timer.Elapsed() after completion = %v, want > 0", elapsed)
+	}
+
+	str := timer.String()
+	if !strings.Contains(str, "Timer (Success") {
+		t.Errorf("Timer.String() should contain status, got %v", str)
+	}
+	if !strings.Contains(str, "Elapsed:") {
+		t.Errorf("Timer.String() should contain elapsed time, got %v", str)
+	}
+}
+
+func TestTimer_Reset(t *testing.T) {
+	timer := &Timer{Child: &Action{Run: func() Status { return Running }}}
+
+	timer.Tick()
+	time.Sleep(10 * time.Millisecond)
+	timer.Tick()
+
+	if elapsed := timer.Elapsed(); elapsed <= 0 {
+		t.Fatalf("Timer.Elapsed() before Reset() = %v, want > 0", elapsed)
+	}
+
+	if got := timer.Reset(); got != Ready {
+		t.Fatalf("Timer.Reset() = %v, want %v", got, Ready)
+	}
+
+	if got := timer.Status(); got != Ready {
+		t.Fatalf("Timer.Status() after Reset() = %v, want %v", got, Ready)
+	}
+
+	if elapsed := timer.Elapsed(); elapsed != 0 {
+		t.Fatalf("Timer.Elapsed() after Reset() = %v, want 0", elapsed)
+	}
+}
+
+func TestTimer_NilChild(t *testing.T) {
+	timer := &Timer{}
+
+	if got := timer.Tick(); got != Failure {
+		t.Fatalf("Timer.Tick() with nil child = %v, want %v", got, Failure)
+	}
+
+	if elapsed := timer.Elapsed(); elapsed != 0 {
+		t.Fatalf("Timer.Elapsed() with nil child = %v, want 0", elapsed)
+	}
+}
+
+func TestTimer_StringIncludesChildAndElapsed(t *testing.T) {
+	timer := &Timer{Child: &Action{Run: func() Status { return Success }}}
+
+	if got := timer.Tick(); got != Success {
+		t.Fatalf("Timer.Tick() = %v, want %v", got, Success)
+	}
+
+	str := timer.String()
+	if !strings.Contains(str, "Timer (Success") {
+		t.Fatalf("Timer.String() missing status, got %v", str)
+	}
+	if !strings.Contains(str, "Elapsed:") {
+		t.Fatalf("Timer.String() missing elapsed field, got %v", str)
+	}
+	if !strings.Contains(str, "Action (Success)") {
+		t.Fatalf("Timer.String() missing child string, got %v", str)
+	}
+}
+
 func TestStatus_String(t *testing.T) {
 	tests := []struct {
 		status   Status
