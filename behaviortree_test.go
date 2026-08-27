@@ -1,12 +1,20 @@
 package behave
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
 	"time"
 )
+
+type valueNode struct{}
+
+func (valueNode) Tick() Status   { return Success }
+func (valueNode) Reset() Status  { return Ready }
+func (valueNode) Status() Status { return Success }
+func (valueNode) String() string { return "valueNode" }
 
 // Example demonstrating a struct with multiple methods implementing Run(), used as behavior tree nodes
 type ExampleActor struct {
@@ -272,6 +280,66 @@ func TestBehaviorTree_String(t *testing.T) {
 	}
 	if !strings.Contains(str, "Action") {
 		t.Errorf("BehaviorTree.String() should contain 'Action', got %v", str)
+	}
+}
+
+func TestBehaviorTree_StringWithoutRoot(t *testing.T) {
+	if got, want := New(nil).String(), "BehaviorTree (Ready)"; got != want {
+		t.Fatalf("BehaviorTree.String() without root = %q, want %q", got, want)
+	}
+}
+
+func TestCompositeNodesHandleNilChildren(t *testing.T) {
+	if got := (&Sequence{Children: []Node{nil}}).Tick(); got != Failure {
+		t.Errorf("Sequence with nil child = %v, want Failure", got)
+	}
+	if got := (&Selector{Children: []Node{nil}}).Tick(); got != Failure {
+		t.Errorf("Selector with nil child = %v, want Failure", got)
+	}
+	if got := (&Parallel{Children: []Node{nil}, MinSuccessCount: 1}).Tick(); got != Failure {
+		t.Errorf("Parallel with nil child = %v, want Failure", got)
+	}
+	if got := (&Composite{Conditions: []Node{nil}}).Tick(); got != Failure {
+		t.Errorf("Composite with nil condition = %v, want Failure", got)
+	}
+
+	// String and Reset should be safe for sparse child lists too.
+	(&Sequence{Children: []Node{nil}}).Reset()
+	if got := (&Sequence{Children: []Node{nil}}).String(); got != "Sequence (Ready)" {
+		t.Errorf("Sequence.String() with nil child = %q", got)
+	}
+}
+
+func TestLogUsesConfiguredLoggerAndValueChild(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&output, nil))
+	level := slog.LevelInfo
+	logNode := &Log{Child: valueNode{}, Logger: logger, LogLevel: &level, Message: "value child"}
+
+	if got := logNode.Tick(); got != Success {
+		t.Fatalf("Log.Tick() = %v, want Success", got)
+	}
+	if !strings.Contains(output.String(), "value child") {
+		t.Fatalf("configured logger did not receive log output: %q", output.String())
+	}
+	if got := logNode.getChildType(); got != "valueNode" {
+		t.Errorf("Log.getChildType() = %q, want valueNode", got)
+	}
+}
+
+func TestWithTimeoutRemainsFailedAfterTimeout(t *testing.T) {
+	calls := 0
+	child := &Action{Run: func() Status { calls++; return Running }}
+	withTimeout := &WithTimeout{Child: child, Duration: 0}
+
+	if got := withTimeout.Tick(); got != Failure {
+		t.Fatalf("initial timeout result = %v, want Failure", got)
+	}
+	if got := withTimeout.Tick(); got != Failure {
+		t.Fatalf("post-timeout result = %v, want Failure", got)
+	}
+	if calls != 1 {
+		t.Errorf("child calls after timeout = %d, want 1", calls)
 	}
 }
 

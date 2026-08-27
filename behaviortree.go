@@ -111,6 +111,9 @@ func (bt *BehaviorTree) Status() Status {
 func (bt *BehaviorTree) String() string {
 	var builder strings.Builder
 	builder.WriteString("BehaviorTree (" + bt.Status().String() + ")")
+	if bt.Root == nil {
+		return builder.String()
+	}
 	// builder.WriteString("\n. ")
 	str := bt.Root.String()
 	lines := strings.Split(str, "\n")
@@ -252,6 +255,10 @@ func (c *Composite) Tick() Status {
 
 	// Check all conditions first (like a sequence - all must succeed)
 	for _, condition := range c.Conditions {
+		if condition == nil {
+			c.status = Failure
+			return c.status
+		}
 		conditionStatus := condition.Tick()
 		switch conditionStatus {
 		case Success:
@@ -287,7 +294,9 @@ func (c *Composite) Tick() Status {
 //     and the child node (if they exist) to their initial state.
 func (c *Composite) Reset() Status {
 	for i := range c.Conditions {
-		c.Conditions[i].Reset()
+		if c.Conditions[i] != nil {
+			c.Conditions[i].Reset()
+		}
 	}
 	if c.Child != nil {
 		c.Child.Reset()
@@ -314,7 +323,12 @@ func (c *Composite) String() string {
 	var builder strings.Builder
 	builder.WriteString("Composite (" + c.Status().String() + ")")
 	for i := range c.Conditions {
-		builder.WriteString("\n  Condition[" + strconv.Itoa(i) + "]: " + c.Conditions[i].String())
+		builder.WriteString("\n  Condition[" + strconv.Itoa(i) + "]: ")
+		if c.Conditions[i] == nil {
+			builder.WriteString("<nil>")
+		} else {
+			builder.WriteString(c.Conditions[i].String())
+		}
 	}
 	if c.Child != nil {
 		childStr := c.Child.String()
@@ -341,7 +355,9 @@ type Selector struct {
 //   - The status of the Selector node after reset, which will be Ready. This method resets all child nodes to their initial state.
 func (s *Selector) Reset() Status {
 	for _, child := range s.Children {
-		child.Reset()
+		if child != nil {
+			child.Reset()
+		}
 	}
 	s.status = Ready
 	return s.status
@@ -355,6 +371,9 @@ func (s *Selector) Reset() Status {
 //     Running and none have succeeded, and Failure if all children have failed or are not ready.
 func (s *Selector) Tick() Status {
 	for _, child := range s.Children {
+		if child == nil {
+			continue
+		}
 		status := child.Tick()
 		switch status {
 		case Failure:
@@ -384,6 +403,9 @@ func (s *Selector) String() string {
 	var builder strings.Builder
 	builder.WriteString("Selector (" + s.Status().String() + ")")
 	for _, child := range s.Children {
+		if child == nil {
+			continue
+		}
 		str := child.String()
 		lines := strings.Split(str, "\n")
 		for _, line := range lines {
@@ -410,7 +432,9 @@ type Sequence struct {
 //     child nodes to their initial state and resets the tracking of successful nodes.
 func (s *Sequence) Reset() Status {
 	for _, child := range s.Children {
-		child.Reset()
+		if child != nil {
+			child.Reset()
+		}
 	}
 	s.status = Ready
 	s.lastNonSuccessIndex = 0
@@ -426,6 +450,10 @@ func (s *Sequence) Tick() Status {
 	// Start from the last non-successful child index
 	for i := s.lastNonSuccessIndex; i < len(s.Children); i++ {
 		child := s.Children[i]
+		if child == nil {
+			s.status = Failure
+			return s.status
+		}
 		status := child.Tick()
 		switch status {
 		case Success:
@@ -461,6 +489,9 @@ func (s *Sequence) String() string {
 	var builder strings.Builder
 	builder.WriteString("Sequence (" + s.Status().String() + ")")
 	for _, child := range s.Children {
+		if child == nil {
+			continue
+		}
 		str := child.String()
 		lines := strings.Split(str, "\n")
 		for _, line := range lines {
@@ -486,7 +517,9 @@ type Parallel struct {
 //     to their initial state.
 func (p *Parallel) Reset() Status {
 	for _, child := range p.Children {
-		child.Reset()
+		if child != nil {
+			child.Reset()
+		}
 	}
 	p.status = Ready
 	return p.status
@@ -516,6 +549,10 @@ func (p *Parallel) Tick() Status {
 
 	// Tick all children
 	for _, child := range p.Children {
+		if child == nil {
+			failureCount++
+			continue
+		}
 		status := child.Tick()
 		switch status {
 		case Success:
@@ -576,6 +613,9 @@ func (p *Parallel) String() string {
 	builder.WriteString(strconv.Itoa(p.MinSuccessCount))
 	builder.WriteString(")")
 	for _, child := range p.Children {
+		if child == nil {
+			continue
+		}
 		str := child.String()
 		lines := strings.Split(str, "\n")
 		for _, line := range lines {
@@ -1297,6 +1337,7 @@ type WithTimeout struct {
 	Child     Node
 	Duration  time.Duration
 	startTime time.Time
+	timedOut  bool
 	status    Status
 }
 
@@ -1412,6 +1453,10 @@ func (wt *WithTimeout) Tick() Status {
 		wt.status = Failure
 		return wt.status
 	}
+	if wt.timedOut {
+		wt.status = Failure
+		return wt.status
+	}
 
 	// If this is the first tick, start the timer
 	if wt.startTime.IsZero() {
@@ -1423,10 +1468,14 @@ func (wt *WithTimeout) Tick() Status {
 	switch childStatus {
 	case Success, Failure:
 		wt.status = childStatus
+		// A completed child ends this timing window. The next execution starts
+		// a fresh window, while a timeout remains terminal until Reset.
+		wt.startTime = time.Time{}
 		return wt.status
 	case Running:
 		if time.Since(wt.startTime) >= wt.Duration {
 			wt.status = Failure // Time's up, child is still running
+			wt.timedOut = true
 			return wt.status
 		}
 		wt.status = Running
@@ -1445,6 +1494,7 @@ func (wt *WithTimeout) Tick() Status {
 func (wt *WithTimeout) Reset() Status {
 	wt.status = Ready
 	wt.startTime = time.Time{}
+	wt.timedOut = false
 	if wt.Child != nil {
 		wt.Child.Reset()
 	}
@@ -1526,6 +1576,11 @@ func (l *Log) Tick() Status {
 	childStatus := l.Child.Tick()
 	l.status = childStatus
 
+	logger := l.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	// Log the result with context
 	message := l.Message
 	if message == "" {
@@ -1549,7 +1604,7 @@ func (l *Log) Tick() Status {
 	}
 
 	// Log with the determined level
-	slog.Log(logContext, logLevel, message,
+	logger.Log(logContext, logLevel, message,
 		"child_status", childStatus.String(),
 		"child_type", l.getChildType(),
 	)
@@ -1567,7 +1622,13 @@ func (l *Log) getChildType() string {
 	}
 
 	t := reflect.TypeOf(l.Child)
-	return t.Elem().Name()
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Name() != "" {
+		return t.Name()
+	}
+	return t.String()
 }
 
 // Reset resets the Log node and its child to the Ready state.
@@ -1592,7 +1653,11 @@ func (l *Log) Reset() Status {
 		logLevel = *l.LogLevel
 	}
 
-	slog.Log(logContext, logLevel, "Log node reset", "message", l.Message)
+	logger := l.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	logger.Log(logContext, logLevel, "Log node reset", "message", l.Message)
 	return l.status
 }
 
